@@ -1,9 +1,18 @@
+/** Visual / collision shape of the part. 'box' is the default for standard bricks. */
+export type ShapeType = 'box' | 'cylinder' | 'gear' | 'custom';
+
 export interface LegoPart {
   id: number;
   partNumber: string;
   quantity: number;
   color: string;
   partName: string;
+  /** Overrides parseDimensions when the part name does not encode NxN dimensions. */
+  dims?: { w: number; d: number; h: number };
+  /** Determines 3D render shape; defaults to 'box'. */
+  shapeType?: ShapeType;
+  /** URL of an external glTF/GLB model for shapeType='custom' (future use). */
+  modelUrl?: string;
 }
 
 export const legoParts: LegoPart[] = [
@@ -1634,5 +1643,37 @@ export const legoParts: LegoPart[] = [
   { "id": 245, "partNumber": "3040-BRY",  "quantity": 12, "color": "Brick Yellow",      "partName": "SLOPE 1X2/45°" },
   { "id": 246, "partNumber": "3040-WHT",  "quantity": 10, "color": "White",             "partName": "SLOPE 1X2/45°" },
   { "id": 247, "partNumber": "3040-GRY",  "quantity": 10, "color": "Medium Stone Grey", "partName": "SLOPE 1X2/45°" },
-  { "id": 248, "partNumber": "3040-YEL",  "quantity": 8,  "color": "Bright Yellow",     "partName": "SLOPE 1X2/45°" }
+  { "id": 248, "partNumber": "3040-YEL",  "quantity": 8,  "color": "Bright Yellow",     "partName": "SLOPE 1X2/45°" },
+
+  // ── 2×4 Brick (additional colors) ──────────────────────────────────────────
+  { "id": 249, "partNumber": "300228", "quantity": 8, "color": "Bright Green",      "partName": "BRICK 2X4" },
+  { "id": 250, "partNumber": "300271", "quantity": 6, "color": "Dark Stone Grey",   "partName": "BRICK 2X4" },
+  { "id": 251, "partNumber": "300201", "quantity": 6, "color": "White",             "partName": "BRICK 2X4" },
+  { "id": 252, "partNumber": "300225", "quantity": 6, "color": "Brick Yellow",      "partName": "BRICK 2X4" },
+
+  // ── 2×2 Plate ───────────────────────────────────────────────────────────────
+  { "id": 253, "partNumber": "302221", "quantity": 8, "color": "Bright Red",        "partName": "PLATE 2X2" },
+  { "id": 254, "partNumber": "302223", "quantity": 8, "color": "Bright Blue",       "partName": "PLATE 2X2" },
+  { "id": 255, "partNumber": "302224", "quantity": 8, "color": "Bright Yellow",     "partName": "PLATE 2X2" },
+  { "id": 256, "partNumber": "302201", "quantity": 6, "color": "White",             "partName": "PLATE 2X2" },
+  { "id": 257, "partNumber": "302271", "quantity": 6, "color": "Dark Stone Grey",   "partName": "PLATE 2X2" },
+
+  // ── 1×1 Round Plate (additional colors) ────────────────────────────────────
+  { "id": 258, "partNumber": "614123", "quantity": 6, "color": "Bright Blue",       "partName": "ROUND PLATE 1X1" },
+  { "id": 259, "partNumber": "614124", "quantity": 6, "color": "Bright Yellow",     "partName": "ROUND PLATE 1X1" },
+  { "id": 260, "partNumber": "614101", "quantity": 4, "color": "White",             "partName": "ROUND PLATE 1X1" },
+  { "id": 261, "partNumber": "614126", "quantity": 4, "color": "Black",             "partName": "ROUND PLATE 1X1" },
+  { "id": 262, "partNumber": "614171", "quantity": 4, "color": "Dark Stone Grey",   "partName": "ROUND PLATE 1X1" },
+
+  // ── M Motor ─────────────────────────────────────────────────────────────────
+  { "id": 263, "partNumber": "88008-DGR", "quantity": 1, "color": "Dark Stone Grey",  "partName": "M MOTOR 3X6",
+    "shapeType": "custom", "dims": { "w": 3, "d": 6, "h": 3 } },
+  { "id": 264, "partNumber": "88008-GRY", "quantity": 1, "color": "Medium Stone Grey","partName": "M MOTOR 3X6",
+    "shapeType": "custom", "dims": { "w": 3, "d": 6, "h": 3 } },
+
+  // ── Technic Gear 24T ────────────────────────────────────────────────────────
+  { "id": 265, "partNumber": "3648-GRY", "quantity": 2, "color": "Medium Stone Grey", "partName": "TECHNIC GEAR 24T",
+    "shapeType": "gear", "dims": { "w": 3, "d": 3, "h": 1 } },
+  { "id": 266, "partNumber": "3648-BLK", "quantity": 2, "color": "Black",             "partName": "TECHNIC GEAR 24T",
+    "shapeType": "gear", "dims": { "w": 3, "d": 3, "h": 1 } }
 ];

@@ -84,13 +84,56 @@ function SpecialSvg({ color }: { color: string }) {
   );
 }
 
+function MotorSvg({ color }: { color: string }) {
+  return (
+    <svg viewBox="0 0 36 36" fill="none" className="w-full h-full">
+      {/* Body */}
+      <rect x="6" y="9" width="24" height="18" rx="3" fill={color} stroke={STROKE} strokeWidth="1.5"/>
+      {/* Left shaft */}
+      <rect x="2" y="15" width="5" height="6" rx="1.5" fill="#888" stroke={STROKE} strokeWidth="0.8"/>
+      {/* Right shaft */}
+      <rect x="29" y="15" width="5" height="6" rx="1.5" fill="#888" stroke={STROKE} strokeWidth="0.8"/>
+      {/* Ventilation grooves */}
+      <line x1="14" y1="12" x2="14" y2="24" stroke="rgba(0,0,0,0.18)" strokeWidth="1"/>
+      <line x1="18" y1="12" x2="18" y2="24" stroke="rgba(0,0,0,0.18)" strokeWidth="1"/>
+      <line x1="22" y1="12" x2="22" y2="24" stroke="rgba(0,0,0,0.18)" strokeWidth="1"/>
+      {/* Highlight */}
+      <rect x="6" y="9" width="24" height="5" rx="3" fill="rgba(255,255,255,0.2)"/>
+    </svg>
+  );
+}
+
+function GearSvg({ color }: { color: string }) {
+  // 12-tooth simplified gear icon
+  const numTeeth = 12;
+  const rOuter = 14, rInner = 10;
+  const pts: string[] = [];
+  for (let i = 0; i < numTeeth; i++) {
+    const a1 = ((i * (360 / numTeeth)) - 90) * (Math.PI / 180);
+    const a2 = ((i * (360 / numTeeth) + 360 / numTeeth / 2) - 90) * (Math.PI / 180);
+    pts.push(`${18 + rOuter * Math.cos(a1)},${18 + rOuter * Math.sin(a1)}`);
+    pts.push(`${18 + rInner * Math.cos(a2)},${18 + rInner * Math.sin(a2)}`);
+  }
+  return (
+    <svg viewBox="0 0 36 36" fill="none" className="w-full h-full">
+      <polygon points={pts.join(' ')} fill={color} stroke={STROKE} strokeWidth="1" strokeLinejoin="round"/>
+      {/* Hub */}
+      <circle cx="18" cy="18" r="5" fill="rgba(0,0,0,0.2)" stroke={STROKE} strokeWidth="0.8"/>
+      {/* Center bore */}
+      <circle cx="18" cy="18" r="2.5" fill="#bbb" stroke={STROKE} strokeWidth="0.7"/>
+    </svg>
+  );
+}
+
 const SVG_MAP: Record<PartCategory, (props: { color: string }) => ReactElement> = {
-  brick: BrickSvg,
-  plate: PlateSvg,
-  roof: RoofSvg,
-  round: RoundSvg,
-  frame: FrameSvg,
+  brick:   BrickSvg,
+  plate:   PlateSvg,
+  roof:    RoofSvg,
+  round:   RoundSvg,
+  frame:   FrameSvg,
   special: SpecialSvg,
+  power:   MotorSvg,
+  gear:    GearSvg,
 };
 
 export function PartIcon({ category, color, size = 36 }: {

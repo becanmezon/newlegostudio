@@ -3,10 +3,11 @@ import { useFrame } from '@react-three/fiber';
 import type { ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { PlacedBrick } from './types';
+import { PLATE_H } from './types';
 
 const STUD_R = 0.28;
-const STUD_H = 0.11;
-const STUD_SEG = 12;
+const STUD_H = 0.18;   // taller for better LEGO look
+const STUD_SEG = 16;   // smoother cylinder
 const GAP = 0.06;
 const DRAG_THRESHOLD_SQ = 49; // 7px
 
@@ -58,19 +59,23 @@ function isSlopePart(partName: string): boolean {
 interface Props {
   brick: PlacedBrick;
   selected: boolean;
-  onSelect: (id: string) => void;
+  onSelect: (id: string, additive: boolean) => void;
   onDragStart?: (brick: PlacedBrick) => void;
   isDragging?: boolean;
 }
 
 export function LegoBrick3D({ brick, selected, onSelect, onDragStart, isDragging = false }: Props) {
-  const { w, d, h, position, colorHex, rotY, partName } = brick;
+  const { w, d, h, position, colorHex, rotY, partName, shapeType } = brick;
   const glowRef = useRef<THREE.Mesh>(null!);
   const pointerDownXY = useRef<[number, number] | null>(null);
   const didDrag = useRef(false);
 
   const isSlope    = isSlopePart(partName);
   const isInverted = isSlope && /INV/i.test(partName);
+
+  // Render-time scale: convert plate-unit h and Y position to Three.js units
+  const renderH    = h * PLATE_H;
+  const renderPosY = position[1] * PLATE_H;
 
   useFrame(({ clock }) => {
     if (glowRef.current) {
@@ -84,13 +89,13 @@ export function LegoBrick3D({ brick, selected, onSelect, onDragStart, isDragging
 
   // Slope geometry (null for normal bricks)
   const slopeGeo = useMemo(
-    () => (isSlope ? buildSlopeGeo(brickW, brickD, h, isInverted) : null),
-    [isSlope, isInverted, brickW, brickD, h],
+    () => (isSlope ? buildSlopeGeo(brickW, brickD, renderH, isInverted) : null),
+    [isSlope, isInverted, brickW, brickD, renderH],
   );
 
-  // Studs (not used for slope bricks)
+  // Studs — omitted for slopes, gears, and custom (motor) parts
   const studs = useMemo(() => {
-    if (isSlope) return [];
+    if (isSlope || shapeType === 'gear' || shapeType === 'custom' || shapeType === 'cylinder') return [];
     const list: [number, number][] = [];
     for (let xi = 0; xi < w; xi++) {
       for (let zi = 0; zi < d; zi++) {
@@ -126,14 +131,14 @@ export function LegoBrick3D({ brick, selected, onSelect, onDragStart, isDragging
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
     if (didDrag.current) { didDrag.current = false; return; }
-    onSelect(brick.id);
+    onSelect(brick.id, e.nativeEvent.shiftKey);
   };
 
   if (isDragging) return null;
 
   return (
     <group
-      position={position}
+      position={[position[0], renderPosY, position[2]]}
       rotation={[0, rotY * (Math.PI / 2), 0]}
       onClick={handleClick}
       onPointerDown={handlePointerDown}
@@ -141,7 +146,19 @@ export function LegoBrick3D({ brick, selected, onSelect, onDragStart, isDragging
       onPointerUp={handlePointerUp}
     >
       {/* ── Body ────────────────────────────────────────────────────────── */}
-      {isSlope && slopeGeo ? (
+      {shapeType === 'gear' ? (
+        // Technic gear — thin cylinder disc, metallic finish
+        <mesh castShadow receiveShadow position={[0, renderH / 2, 0]}>
+          <cylinderGeometry args={[Math.min(brickW, brickD) / 2, Math.min(brickW, brickD) / 2, renderH, 24]} />
+          <meshStandardMaterial color={colorHex} roughness={0.2} metalness={0.55} />
+        </mesh>
+      ) : shapeType === 'cylinder' ? (
+        // Generic cylinder part
+        <mesh castShadow receiveShadow position={[0, renderH / 2, 0]}>
+          <cylinderGeometry args={[Math.min(brickW, brickD) / 2, Math.min(brickW, brickD) / 2, renderH, 16]} />
+          <meshStandardMaterial color={colorHex} roughness={0.45} metalness={0.05} />
+        </mesh>
+      ) : isSlope && slopeGeo ? (
         <mesh castShadow receiveShadow geometry={slopeGeo}>
           <meshStandardMaterial
             color={colorHex}
@@ -151,23 +168,28 @@ export function LegoBrick3D({ brick, selected, onSelect, onDragStart, isDragging
           />
         </mesh>
       ) : (
-        <mesh castShadow receiveShadow position={[0, h / 2, 0]}>
-          <boxGeometry args={[brickW, h, brickD]} />
-          <meshStandardMaterial color={colorHex} roughness={0.45} metalness={0.05} />
+        // Default box — covers 'box', 'custom' (motor fallback), and undefined
+        <mesh castShadow receiveShadow position={[0, renderH / 2, 0]}>
+          <boxGeometry args={[brickW, renderH, brickD]} />
+          <meshStandardMaterial
+            color={colorHex}
+            roughness={shapeType === 'custom' ? 0.3 : 0.45}
+            metalness={shapeType === 'custom' ? 0.35 : 0.05}
+          />
         </mesh>
       )}
 
       {/* ── Studs (regular bricks only) ─────────────────────────────────── */}
       {studs.map(([sx, sz]) => (
-        <mesh key={`${sx}-${sz}`} castShadow position={[sx, h + STUD_H / 2, sz]}>
+        <mesh key={`${sx}-${sz}`} castShadow position={[sx, renderH + STUD_H / 2, sz]}>
           <cylinderGeometry args={[STUD_R, STUD_R, STUD_H, STUD_SEG]} />
-          <meshStandardMaterial color={colorHex} roughness={0.45} />
+          <meshStandardMaterial color={colorHex} roughness={0.28} metalness={0.06} />
         </mesh>
       ))}
 
       {/* ── Selection glow (always box-shaped for simplicity) ───────────── */}
-      <mesh ref={glowRef} position={[0, h / 2, 0]}>
-        <boxGeometry args={[brickW + 0.12, h + 0.12, brickD + 0.12]} />
+      <mesh ref={glowRef} position={[0, renderH / 2, 0]}>
+        <boxGeometry args={[brickW + 0.12, renderH + 0.12, brickD + 0.12]} />
         <meshBasicMaterial
           color="#facc15"
           transparent
@@ -178,8 +200,8 @@ export function LegoBrick3D({ brick, selected, onSelect, onDragStart, isDragging
       </mesh>
 
       {selected && (
-        <mesh position={[0, h / 2, 0]}>
-          <boxGeometry args={[brickW + 0.05, h + 0.05, brickD + 0.05]} />
+        <mesh position={[0, renderH / 2, 0]}>
+          <boxGeometry args={[brickW + 0.05, renderH + 0.05, brickD + 0.05]} />
           <meshBasicMaterial color="#facc15" wireframe />
         </mesh>
       )}

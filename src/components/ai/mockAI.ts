@@ -64,53 +64,53 @@ function entryToBrick(e: Entry): PlacedBrick | null {
 // ─── Mock Blueprints ────────────────────────────────────────────────────────
 
 const TOWER_ENTRIES: Entry[] = [
-  { nameContains: 'BRICK 2X4', color: 'Bright Red',             x: 0, y: 0.0, z: 0 },
-  { nameContains: 'BRICK 2X4', color: 'Bright Orange',          x: 0, y: 1.2, z: 0, rotY: 1 },
-  { nameContains: 'BRICK 2X4', color: 'Bright Yellow',          x: 0, y: 2.4, z: 0 },
-  { nameContains: 'BRICK 2X4', color: 'Bright Yellowish Green', x: 0, y: 3.6, z: 0, rotY: 1 },
-  { nameContains: 'BRICK 2X4', color: 'Bright Blue',            x: 0, y: 4.8, z: 0 },
-  { nameContains: 'BRICK 2X2', color: 'Medium Azur',            x: 0, y: 6.0, z: 0 },
-  { nameContains: 'BRICK 1X1', color: 'Bright Yellow',          x: 0, y: 7.2, z: 0 },
+  { nameContains: 'BRICK 2X4', color: 'Bright Red',             x: 0, y:  0, z: 0 },
+  { nameContains: 'BRICK 2X4', color: 'Bright Orange',          x: 0, y:  3, z: 0, rotY: 1 },
+  { nameContains: 'BRICK 2X4', color: 'Bright Yellow',          x: 0, y:  6, z: 0 },
+  { nameContains: 'BRICK 2X4', color: 'Bright Yellowish Green', x: 0, y:  9, z: 0, rotY: 1 },
+  { nameContains: 'BRICK 2X4', color: 'Bright Blue',            x: 0, y: 12, z: 0 },
+  { nameContains: 'BRICK 2X2', color: 'Medium Azur',            x: 0, y: 15, z: 0 },
+  { nameContains: 'BRICK 1X1', color: 'Bright Yellow',          x: 0, y: 18, z: 0 },
 ];
 
 const VILLAGE_ENTRIES: Entry[] = [
   // Red house - walls
-  { nameContains: 'BRICK 2X4', color: 'Bright Red', x: -5, y: 0.0, z: 0, rotY: 1 },
-  { nameContains: 'BRICK 2X4', color: 'Bright Red', x: -5, y: 1.2, z: 0, rotY: 1 },
-  { nameContains: 'BRICK 2X4', color: 'Bright Red', x: -5, y: 2.4, z: 0, rotY: 1 },
+  { nameContains: 'BRICK 2X4', color: 'Bright Red', x: -5, y: 0, z: 0, rotY: 1 },
+  { nameContains: 'BRICK 2X4', color: 'Bright Red', x: -5, y: 3, z: 0, rotY: 1 },
+  { nameContains: 'BRICK 2X4', color: 'Bright Red', x: -5, y: 6, z: 0, rotY: 1 },
   // Red house - roof
-  { nameContains: 'ROOF TILE 2X2/45°', color: 'Bright Yellow', x: -6, y: 3.6, z: 0 },
-  { nameContains: 'ROOF TILE 2X2/45°', color: 'Bright Yellow', x: -4, y: 3.6, z: 0 },
+  { nameContains: 'ROOF TILE 2X2/45°', color: 'Bright Yellow', x: -6, y: 9, z: 0 },
+  { nameContains: 'ROOF TILE 2X2/45°', color: 'Bright Yellow', x: -4, y: 9, z: 0 },
   // Blue house - walls
-  { nameContains: 'BRICK 2X4', color: 'Bright Blue', x: 3, y: 0.0, z: 0, rotY: 1 },
-  { nameContains: 'BRICK 2X4', color: 'Bright Blue', x: 3, y: 1.2, z: 0, rotY: 1 },
-  { nameContains: 'BRICK 2X4', color: 'Bright Blue', x: 3, y: 2.4, z: 0, rotY: 1 },
+  { nameContains: 'BRICK 2X4', color: 'Bright Blue', x: 3, y: 0, z: 0, rotY: 1 },
+  { nameContains: 'BRICK 2X4', color: 'Bright Blue', x: 3, y: 3, z: 0, rotY: 1 },
+  { nameContains: 'BRICK 2X4', color: 'Bright Blue', x: 3, y: 6, z: 0, rotY: 1 },
   // Blue house - roof
-  { nameContains: 'ROOF TILE 2X2/45°', color: 'Dark Green', x: 2, y: 3.6, z: 0 },
-  { nameContains: 'ROOF TILE 2X2/45°', color: 'Dark Green', x: 4, y: 3.6, z: 0 },
+  { nameContains: 'ROOF TILE 2X2/45°', color: 'Dark Green', x: 2, y: 9, z: 0 },
+  { nameContains: 'ROOF TILE 2X2/45°', color: 'Dark Green', x: 4, y: 9, z: 0 },
   // Path between houses
   { nameContains: 'FLAT TILE 2X4', color: 'Medium Stone Grey', x: -1, y: 0, z: 0, rotY: 1 },
 ];
 
 const ROBOT_ENTRIES: Entry[] = [
   // Torso (3 layers)
-  { nameContains: 'BRICK 2X4', color: 'Medium Stone Grey', x: 0, y: 0.0, z: 0 },
-  { nameContains: 'BRICK 2X4', color: 'Medium Stone Grey', x: 0, y: 1.2, z: 0 },
-  { nameContains: 'BRICK 2X4', color: 'Medium Stone Grey', x: 0, y: 2.4, z: 0 },
+  { nameContains: 'BRICK 2X4', color: 'Medium Stone Grey', x: 0, y:  0, z: 0 },
+  { nameContains: 'BRICK 2X4', color: 'Medium Stone Grey', x: 0, y:  3, z: 0 },
+  { nameContains: 'BRICK 2X4', color: 'Medium Stone Grey', x: 0, y:  6, z: 0 },
   // Head
-  { nameContains: 'BRICK 1X4',  color: 'Medium Stone Grey', x: 0, y: 3.6, z: 0 },
-  { nameContains: 'BRICK 1X4',  color: 'Medium Stone Grey', x: 0, y: 4.8, z: 0 },
+  { nameContains: 'BRICK 1X4',  color: 'Medium Stone Grey', x: 0, y:  9, z: 0 },
+  { nameContains: 'BRICK 1X4',  color: 'Medium Stone Grey', x: 0, y: 12, z: 0 },
   // Eyes
-  { nameContains: 'ROUND PLATE 1X1', color: 'Bright Red',       x: -0.5, y: 6.0, z: -0.4 },
-  { nameContains: 'ROUND PLATE 1X1', color: 'Dark Stone Grey',  x:  0.5, y: 6.0, z: -0.4 },
+  { nameContains: 'ROUND PLATE 1X1', color: 'Bright Red',       x: -0.5, y: 15, z: -0.4 },
+  { nameContains: 'ROUND PLATE 1X1', color: 'Dark Stone Grey',  x:  0.5, y: 15, z: -0.4 },
   // Arms
-  { nameContains: 'BRICK 1X2', color: 'Medium Stone Grey', x: -3, y: 1.8, z: 0 },
-  { nameContains: 'BRICK 1X2', color: 'Medium Stone Grey', x:  3, y: 1.8, z: 0 },
+  { nameContains: 'BRICK 1X2', color: 'Medium Stone Grey', x: -3, y: 4, z: 0 },
+  { nameContains: 'BRICK 1X2', color: 'Medium Stone Grey', x:  3, y: 4, z: 0 },
   // Legs
   { nameContains: 'BRICK 1X2', color: 'Dark Stone Grey', x: -0.5, y: 0, z: 2 },
   { nameContains: 'BRICK 1X2', color: 'Dark Stone Grey', x:  0.5, y: 0, z: 2 },
   // Antenna
-  { nameContains: 'BRICK 1X1', color: 'Bright Yellow', x: 0, y: 6.0, z: 0 },
+  { nameContains: 'BRICK 1X1', color: 'Bright Yellow', x: 0, y: 15, z: 0 },
 ];
 
 const BLUEPRINTS = [

@@ -1,10 +1,13 @@
 import { PART_COLOR_HEX } from '../../data/colors';
-import type { LegoPart } from '../../data/parts';
+import type { LegoPart, ShapeType } from '../../data/parts';
 
-export type PartCategory = 'brick' | 'plate' | 'roof' | 'round' | 'frame' | 'special';
+export type PartCategory = 'brick' | 'plate' | 'roof' | 'round' | 'frame' | 'special' | 'power' | 'gear';
 
 export function getCategory(partName: string): PartCategory {
   const n = partName.toUpperCase();
+  // Technic/power parts — checked first to avoid false 'special' fallback
+  if (n.includes('MOTOR') || n.includes('ENGINE') || n.includes('BATTERY')) return 'power';
+  if (n.includes('GEAR') || n.includes('RACK') || n.includes('WORM')) return 'gear';
   if (n.includes('ROOF') || n.includes('SLOPE') || (n.includes('45') && !n.includes('ROUND'))) return 'roof';
   if (n.includes('ROUND') || n.includes('CYLINDER') || n.includes('CONE') || n.includes('DOME') || n.includes('SPHERE')) return 'round';
   if (n.includes('WINDOW') || n.includes('DOOR') || n.includes('FRAME') || n.includes('ARCH')) return 'frame';
@@ -21,10 +24,14 @@ export interface PlacedBrick {
   colorHex: string;
   w: number;   // studs wide (X)
   d: number;   // studs deep (Z)
-  h: number;   // height (Y)
+  h: number;   // height in plate units (1=plate, 3=brick)
   position: [number, number, number];
   rotY: number; // 0-3  (steps of 90°)
+  shapeType?: ShapeType;
 }
+
+/** Three.js units per 1 plate unit (= 3.2mm / 8mm LEGO ratio). */
+export const PLATE_H = 0.4;
 
 export function parseDimensions(name: string): { w: number; d: number; h: number } {
   const m = name.match(/(\d+)\s*[Xx]\s*(\d+)/);
@@ -34,9 +41,10 @@ export function parseDimensions(name: string): { w: number; d: number; h: number
     // ROOF TILE contains "TILE" but must not be treated as plate-height
     const isRoofOrSlope = /SLOPE|ROOF\s*TILE/i.test(name);
     const isFlat = !isRoofOrSlope && /PLATE|TILE|FLAT/i.test(name);
-    return { w: a, d: b, h: isFlat ? 0.4 : 1.2 };
+    // h is in plate units: 1 plate = 1, 1 brick = 3
+    return { w: a, d: b, h: isFlat ? 1 : 3 };
   }
-  return { w: 1, d: 1, h: 1.2 };
+  return { w: 1, d: 1, h: 3 };
 }
 
 export function makeId(): string {
@@ -44,7 +52,8 @@ export function makeId(): string {
 }
 
 export function brickFromPart(part: LegoPart, placedCount: number): PlacedBrick {
-  const { w, d, h } = parseDimensions(part.partName);
+  // part.dims overrides name-based parsing (used for motors, gears, etc.)
+  const { w, d, h } = part.dims ?? parseDimensions(part.partName);
   const col = placedCount % 6;
   const row = Math.floor(placedCount / 6);
   // Snap initial position to the correct stud subgrid for this brick's dimensions
@@ -59,6 +68,7 @@ export function brickFromPart(part: LegoPart, placedCount: number): PlacedBrick 
     w, d, h,
     position: [ix, 0, iz],
     rotY: 0,
+    shapeType: part.shapeType,
   };
 }
 

@@ -10,12 +10,28 @@ import { PartIcon } from '../canvas/PartIcon';
 
 interface Props {
   bricks: PlacedBrick[];
-  selectedId: string | null;
-  onSelect: (id: string | null) => void;
+  selectedIds: string[];
+  onSelect: (id: string, additive: boolean) => void;
+  onSelectMany: (ids: string[]) => void;
+  onDeselect: () => void;
   onAddBrick: (part: LegoPart) => string;
   onMoveBrick: (id: string, pos: [number, number, number]) => void;
-  onRotateBrick: (id: string) => void;
-  onDeleteBrick: (id: string) => void;
+  onMoveBricks: (moves: { id: string; pos: [number, number, number] }[]) => void;
+}
+
+// Keyboard hint shown while a brick is selected
+function KeyHint() {
+  return (
+    <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+      <div className="flex items-center gap-3 bg-black/55 backdrop-blur-sm text-white text-[11px] font-bold px-4 py-2 rounded-full shadow-lg select-none whitespace-nowrap">
+        <span><kbd className="bg-white/20 px-1.5 py-0.5 rounded text-[10px]">↑↓←→</kbd> まわす</span>
+        <span className="text-white/40">|</span>
+        <span><kbd className="bg-white/20 px-1.5 py-0.5 rounded text-[10px]">Del</kbd> けす</span>
+        <span className="text-white/40">|</span>
+        <span>ドラッグ: うごかす</span>
+      </div>
+    </div>
+  );
 }
 
 type CategoryFilter = PartCategory | 'all';
@@ -27,50 +43,10 @@ const CATEGORY_TABS: { id: CategoryFilter; emoji: string; label: string }[] = [
   { id: 'roof',    emoji: '🏠', label: 'やね'     },
   { id: 'round',   emoji: '⭕', label: 'まるい'   },
   { id: 'frame',   emoji: '🪟', label: 'まど'     },
+  { id: 'power',   emoji: '⚙️', label: 'どうりょく' },
+  { id: 'gear',    emoji: '🔩', label: 'ギア'     },
   { id: 'special', emoji: '⭐', label: 'とくしゅ' },
 ];
-
-// ── Selection toolbar ────────────────────────────────────────────────────────
-function SelectionToolbar({
-  brick,
-  onRotate,
-  onDelete,
-  onDeselect,
-}: {
-  brick: PlacedBrick;
-  onRotate: () => void;
-  onDelete: () => void;
-  onDeselect: () => void;
-}) {
-  return (
-    <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 bg-yellow-300 border-4 border-yellow-500 rounded-2xl px-4 py-2 shadow-xl">
-      <span className="text-xs font-black text-yellow-900 mr-1 max-w-32 truncate">
-        {brick.partName}
-      </span>
-      <button
-        onClick={onRotate}
-        className="flex flex-col items-center gap-0.5 bg-white hover:bg-yellow-100 rounded-xl px-3 py-1.5 transition-colors shadow"
-      >
-        <span className="text-xl">🔄</span>
-        <span className="text-xs font-black text-gray-600">まわす</span>
-      </button>
-      <button
-        onClick={onDelete}
-        className="flex flex-col items-center gap-0.5 bg-white hover:bg-red-100 rounded-xl px-3 py-1.5 transition-colors shadow"
-      >
-        <span className="text-xl">🗑️</span>
-        <span className="text-xs font-black text-gray-600">けす</span>
-      </button>
-      <button
-        onClick={onDeselect}
-        className="flex flex-col items-center gap-0.5 bg-white hover:bg-gray-100 rounded-xl px-3 py-1.5 transition-colors shadow"
-      >
-        <span className="text-xl">✅</span>
-        <span className="text-xs font-black text-gray-600">かんりょう</span>
-      </button>
-    </div>
-  );
-}
 
 // ── Parts sidebar ────────────────────────────────────────────────────────────
 function PartsSidebar({
@@ -169,20 +145,21 @@ function PartsSidebar({
 // ── Main BuildMode ────────────────────────────────────────────────────────────
 export function BuildMode({
   bricks,
-  selectedId,
+  selectedIds,
   onSelect,
+  onSelectMany,
+  onDeselect,
   onAddBrick,
   onMoveBrick,
-  onRotateBrick,
-  onDeleteBrick,
+  onMoveBricks,
 }: Props) {
   const [search, setSearch] = useState('');
 
-  const selectedBrick = bricks.find((b) => b.id === selectedId) ?? null;
+  const hasSelection = selectedIds.length > 0;
 
   const handleAddPart = (part: LegoPart) => {
     const id = onAddBrick(part);
-    onSelect(id);
+    onSelect(id, false);
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
@@ -201,20 +178,17 @@ export function BuildMode({
         onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }}
         onDrop={handleDrop}
       >
-        {selectedBrick && (
-          <SelectionToolbar
-            brick={selectedBrick}
-            onRotate={() => onRotateBrick(selectedBrick.id)}
-            onDelete={() => { onDeleteBrick(selectedBrick.id); onSelect(null); }}
-            onDeselect={() => onSelect(null)}
-          />
-        )}
+        {/* Keyboard hint — shown while a brick is selected */}
+        {hasSelection && <KeyHint />}
 
         <LegoCanvas
           bricks={bricks}
-          selectedId={selectedId}
+          selectedIds={selectedIds}
           onSelect={onSelect}
+          onSelectMany={onSelectMany}
+          onDeselect={onDeselect}
           onMove={onMoveBrick}
+          onMoveBricks={onMoveBricks}
         />
 
         {bricks.length === 0 && (
@@ -226,12 +200,6 @@ export function BuildMode({
                 ひだりのパーツをクリックするか<br />ここにドラッグしてね
               </p>
             </div>
-          </div>
-        )}
-
-        {selectedBrick && (
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/50 text-white text-xs font-bold px-4 py-2 rounded-full pointer-events-none">
-            ドラッグでうごかせるよ ✨
           </div>
         )}
 
