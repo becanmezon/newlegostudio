@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { legoParts } from '../../data/parts';
 import type { LegoPart } from '../../data/parts';
 import { PART_COLOR_HEX } from '../../data/colors';
@@ -7,6 +7,7 @@ import type { PlacedBrick } from '../canvas/types';
 import { getCategory } from '../canvas/types';
 import type { PartCategory } from '../canvas/types';
 import { PartIcon } from '../canvas/PartIcon';
+import type { LDrawStatus } from '../canvas/LDrawModel';
 
 interface Props {
   bricks: PlacedBrick[];
@@ -154,6 +155,14 @@ export function BuildMode({
   onMoveBricks,
 }: Props) {
   const [search, setSearch] = useState('');
+  const [ldrawTest, setLdrawTest] = useState<string | null>(null);
+  const [ldrawStatus, setLdrawStatus] = useState<LDrawStatus>('idle');
+  const [ldrawError, setLdrawError] = useState<string | null>(null);
+
+  const handleLDrawStatus = useCallback((s: LDrawStatus, detail?: string) => {
+    setLdrawStatus(s);
+    setLdrawError(detail ?? null);
+  }, []);
 
   const hasSelection = selectedIds.length > 0;
 
@@ -189,6 +198,8 @@ export function BuildMode({
           onDeselect={onDeselect}
           onMove={onMoveBrick}
           onMoveBricks={onMoveBricks}
+          ldrawTestPart={ldrawTest}
+          onLDrawStatus={handleLDrawStatus}
         />
 
         {bricks.length === 0 && (
@@ -208,6 +219,42 @@ export function BuildMode({
             🧱 {bricks.length} こ
           </div>
         )}
+
+        {/* LDraw test toggle — bottom-left */}
+        <div className="absolute bottom-3 left-3 z-10 flex flex-col gap-1 items-start">
+          <button
+            onClick={() => {
+              const next = ldrawTest ? null : '3001';
+              setLdrawTest(next);
+              if (!next) setLdrawStatus('idle');
+            }}
+            className={[
+              'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black shadow border-2 transition-all active:scale-95',
+              ldrawStatus === 'error'
+                ? 'bg-red-100 border-red-400 text-red-700'
+                : ldrawTest
+                  ? 'bg-orange-400 border-orange-600 text-white'
+                  : 'bg-white/90 border-gray-300 text-gray-600 hover:border-orange-400 hover:text-orange-600',
+            ].join(' ')}
+          >
+            <span>
+              {ldrawStatus === 'loading' ? '⏳' :
+               ldrawStatus === 'done'    ? '✅' :
+               ldrawStatus === 'error'   ? '❌' : '🧪'}
+            </span>
+            <span>
+              {ldrawStatus === 'loading' ? '読み込み中…' :
+               ldrawStatus === 'done'    ? 'LDraw 表示中 (3001)' :
+               ldrawStatus === 'error'   ? 'エラー（コンソール確認）' :
+               ldrawTest                 ? 'LDraw 非表示' : 'LDraw テスト (3001)'}
+            </span>
+          </button>
+          {ldrawStatus === 'error' && ldrawError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg px-2 py-1 text-[10px] text-red-700 max-w-[220px] break-all shadow">
+              {ldrawError}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

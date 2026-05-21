@@ -1,9 +1,13 @@
 /**
  * claudeAPI.ts
  *
- * Calls the Anthropic Claude API with the 3D LEGO Geometric Configuration
- * Engine system prompt. Converts the response JSON (mm coordinates) into
- * PlacedBrick[] using the app's stud/plate-unit coordinate system.
+ * Calls the Anthropic Claude API with the LEGO placement engine system prompt.
+ * Parses the returned JSON (Antigravity format) into PlacedBrick[] for the 3D canvas.
+ *
+ * Output format (Antigravity):
+ *   { "parts": [ { "id", "type", "color", "position": {x,y,z}, "rotation": {x,y,z} } ] }
+ *
+ * Coordinate units: x/z = studs, y = plate units (1 plate = 3.2mm, 1 brick = 3 plates)
  */
 
 import { legoParts } from '../../data/parts';
@@ -13,45 +17,59 @@ import type { PlacedBrick } from '../canvas/types';
 
 // ── System prompt ─────────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `あなたは3Dレゴ（ブロック）モデリングにおける、高精度な幾何学配置エンジンです。
-ユーザーの指示を解釈し、パーツ同士が完全に結合（スナップ）する正確な3D座標と回転角を算出して、指定されたJSONフォーマットのみを出力してください。
-
-【座標系】
-- X/Z軸: 1単位 = 1スタッド（ポッチ1個分）
-- Y軸: 1単位 = 1プレート高さ（3.2mm）
-  - ブロック（brick）の高さ = 3プレート単位
-  - プレート（plate）の高さ = 1プレート単位
-
-【使用できるパーツタイプ】
-- "BRICK NxM" : N×Mスタッドのブロック（高さ3）
-- "PLATE NxM" : N×Mスタッドのプレート（高さ1）
-- "ROOF TILE NxM/45°" : 屋根スロープ
-
-【配置ルール】
-1. Y座標は底面の高さ（プレート単位）。地面は0。
-2. X/Z座標はパーツ中心。スタッドグリッドに合わせること。
-3. rotY: 0=そのまま、1=90°回転、2=180°、3=270°（整数のみ）
-4. パーツ同士が重ならないこと。
+const SYSTEM_PROMPT = `あなたは3DレゴブロックAI配置エンジンです。
+ユーザーの指示に従い、パーツの配置データを以下のJSONフォーマットのみで出力してください。
+説明・補足・マークダウンのコードブロックは一切出力しないでください。
 
 【出力フォーマット】
-思考プロセスや説明は一切出力せず、以下のJSON配列のみを返してください:
-[
-  {
-    "type": "BRICK 2X4",
-    "color": "Bright Red",
-    "x": 0,
-    "y": 0,
-    "z": 0,
-    "rotY": 0
-  }
-]
+{
+  "parts": [
+    {
+      "id": "p1",
+      "type": "Part_2x4",
+      "color": "Bright Red",
+      "position": { "x": 0, "y": 0, "z": 0 },
+      "rotation": { "x": 0, "y": 0, "z": 0 }
+    }
+  ]
+}
+
+【座標系】
+- x / z 軸 : スタッド単位（ポッチ1個 = 1単位）、整数で指定
+- y 軸     : プレート単位（プレート1枚 = 1単位、ブリック = 3単位）
+- position は各パーツの底面中心座標
+- 地面は y = 0
+
+【typeの書き方】
+- "Part_WxD"  : 通常ブリック（高さ3プレート）、例: "Part_2x4"
+- "Plate_WxD" : フラットプレート（高さ1プレート）、例: "Plate_1x4"
+- "Roof_WxD"  : 屋根スロープ（高さ3プレート）、例: "Roof_2x2"
+
+【rotation.yの値（度数）】
+0 = そのまま / 90 = 90°回転 / 180 = 180° / 270 = 270°
+rotation.x と rotation.z は常に 0 にしてください。
 
 【使用できる色名（必ずこの中から選ぶ）】
 Black, Dark Stone Grey, Medium Stone Grey, White, Bright Red, Bright Orange,
 Bright Yellow, Bright Yellowish Green, Dark Green, Bright Blue, Medium Azur,
-Bright Purple, Reddish Brown, Sand Yellow, Sand Blue, Dark Orange`;
+Bright Purple, Reddish Brown, Sand Yellow, Sand Blue, Dark Orange
 
-// ── Type for Claude response items ────────────────────────────────────────────
+【配置ルール】
+1. パーツ同士が重ならないようにする
+2. 積み重ねる場合は下のパーツの y + h を上のパーツの y にする
+3. JSONのみ出力（{ "parts": [...] } の形式を厳守）`;
+
+// ── Antigravity format (new) ──────────────────────────────────────────────────
+
+interface AntigravityPart {
+  id: string;
+  type: string;    // "Part_2x4" | "Plate_1x4" | "Roof_2x2"
+  color: string;
+  position: { x: number; y: number; z: number };
+  rotation: { x: number; y: number; z: number };
+}
+
+// ── Legacy array format (fallback) ───────────────────────────────────────────
 
 interface RawBrick {
   type: string;
@@ -124,9 +142,57 @@ function resolvePart(type: string, color: string) {
   return { part, colorKey };
 }
 
-// ── Coordinate converter ──────────────────────────────────────────────────────
-// The system prompt asks Claude to output stud/plate units directly,
-// so no mm conversion is needed — x/z are studs, y is plate units.
+// ── Antigravity format converter (new) ───────────────────────────────────────
+
+function antigravityToBrick(
+  ap: AntigravityPart,
+  existing: PlacedBrick[],
+): PlacedBrick | null {
+  // Parse "Part_2x4" / "Plate_1x4" / "Roof_2x2" → dims + kind
+  const typeUpper = ap.type.toUpperCase();
+  const isPlateType = typeUpper.startsWith('PLATE_');
+  const isRoofType = typeUpper.startsWith('ROOF_');
+
+  const dimMatch = ap.type.match(/(\d+)[xX](\d+)/);
+  if (!dimMatch) return null;
+  const w = Math.min(parseInt(dimMatch[1]), 8);
+  const d = Math.min(parseInt(dimMatch[2]), 8);
+  const h = isPlateType ? 1 : 3;
+
+  // Build a search key for resolvePart
+  let searchType: string;
+  if (isPlateType)     searchType = `PLATE ${w}X${d}`;
+  else if (isRoofType) searchType = `ROOF TILE ${w}X${d}`;
+  else                 searchType = `BRICK ${w}X${d}`;
+
+  const { part, colorKey } = resolvePart(searchType, ap.color);
+
+  const rotY = (Math.round((ap.rotation?.y ?? 0) / 90) % 4 + 4) % 4;
+  const rotated = rotY % 2 === 1;
+  const ew = rotated ? d : w;
+  const ed = rotated ? w : d;
+
+  const sx = snapCenter(ap.position.x, ew);
+  const sz = snapCenter(ap.position.z, ed);
+  const id = makeId();
+  const sy = ap.position.y !== 0
+    ? ap.position.y
+    : findSnapY({ id, position: [sx, 0, sz], w, d, rotY }, existing);
+
+  return {
+    id,
+    partId: part?.id ?? 0,
+    partName: part?.partName ?? searchType,
+    colorName: colorKey,
+    colorHex: PART_COLOR_HEX[colorKey] ?? '#aaaaaa',
+    w, d, h,
+    position: [sx, sy, sz],
+    rotY,
+    shapeType: part?.shapeType,
+  };
+}
+
+// ── Legacy array format converter (fallback) ──────────────────────────────────
 
 function rawToBrick(
   raw: RawBrick,
@@ -205,17 +271,38 @@ export async function callClaudeAPI({ apiKey, prompt }: ClaudeAPIOptions): Promi
   const data = await response.json() as {
     content: { type: string; text: string }[];
   };
-  const text = data.content.find((c) => c.type === 'text')?.text ?? '[]';
+  const text = data.content.find((c) => c.type === 'text')?.text ?? '';
 
-  // Extract JSON array from the response (Claude sometimes wraps in markdown)
-  const jsonMatch = text.match(/\[[\s\S]*\]/);
-  if (!jsonMatch) throw new Error('AIの返答にJSONが含まれていませんでした');
+  // Strip markdown code fences if present
+  const stripped = text.replace(/```(?:json)?\s*/g, '').replace(/```\s*/g, '').trim();
 
-  const raw: RawBrick[] = JSON.parse(jsonMatch[0]);
   const bricks: PlacedBrick[] = [];
-  for (const item of raw) {
-    const brick = rawToBrick(item, bricks);
-    if (brick) bricks.push(brick);
+
+  // ── Try Antigravity format: { "parts": [...] } ──────────────────────────────
+  const objMatch = stripped.match(/\{[\s\S]*\}/);
+  if (objMatch) {
+    try {
+      const parsed = JSON.parse(objMatch[0]) as { parts?: AntigravityPart[] };
+      if (Array.isArray(parsed.parts)) {
+        for (const item of parsed.parts) {
+          const brick = antigravityToBrick(item, bricks);
+          if (brick) bricks.push(brick);
+        }
+      }
+    } catch {
+      // fall through to legacy format
+    }
+  }
+
+  // ── Fallback: legacy array format [ { type, color, x, y, z, rotY } ] ────────
+  if (bricks.length === 0) {
+    const arrMatch = stripped.match(/\[[\s\S]*\]/);
+    if (!arrMatch) throw new Error('AIの返答にJSONが含まれていませんでした');
+    const raw: RawBrick[] = JSON.parse(arrMatch[0]);
+    for (const item of raw) {
+      const brick = rawToBrick(item, bricks);
+      if (brick) bricks.push(brick);
+    }
   }
 
   if (bricks.length === 0) throw new Error('パーツを配置できませんでした。別の指示を試してください。');
