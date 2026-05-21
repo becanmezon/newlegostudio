@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { callMockAI } from '../ai/mockAI';
 import type { AiCallMode, AiResult, SuggestionItem } from '../ai/mockAI';
+import { callClaudeAPI } from '../ai/claudeAPI';
 import type { PlacedBrick } from '../canvas/types';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
+type TopTab = 'camera' | 'text';
 type Phase = 'menu' | 'upload' | 'loading' | 'result';
 
 interface Props {
@@ -21,6 +23,130 @@ const LOADING_MSGS = [
   { icon: '🎨', text: 'せっけいちゅう…' },
   { icon: '🔧', text: 'くみたててみています…' },
 ];
+
+// ─── Text-input (Claude API) mode ────────────────────────────────────────────
+
+const EXAMPLE_PROMPTS = [
+  '赤の2x4ブロックを3段積み上げて',
+  '青の2x2ブロックを横に4つ並べて',
+  '黄色の2x4を土台にして、上に赤の2x2を中央に載せて',
+  '緑のプレートを敷いて、その上に白い家の形を作って',
+];
+
+function TextInputMode({
+  onImportBricks,
+}: {
+  onImportBricks: (bricks: PlacedBrick[]) => void;
+}) {
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('claude_api_key') ?? '');
+  const [showKey, setShowKey] = useState(false);
+  const [prompt, setPrompt] = useState('');
+  const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [error, setError] = useState('');
+
+  const saveKey = (v: string) => {
+    setApiKey(v);
+    localStorage.setItem('claude_api_key', v);
+  };
+
+  const handleSend = async () => {
+    if (!apiKey.trim()) { setError('APIキーを入力してください'); setStatus('error'); return; }
+    if (!prompt.trim()) { setError('指示を入力してください'); setStatus('error'); return; }
+    setStatus('loading');
+    setError('');
+    try {
+      const bricks = await callClaudeAPI({ apiKey: apiKey.trim(), prompt: prompt.trim() });
+      onImportBricks(bricks);
+      setPrompt('');
+      setStatus('idle');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '不明なエラーが発生しました');
+      setStatus('error');
+    }
+  };
+
+  return (
+    <div className="flex-1 flex flex-col p-5 gap-4 overflow-auto">
+      {/* API Key */}
+      <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-4">
+        <p className="text-xs font-black text-amber-700 mb-2">🔑 Claude APIキー</p>
+        <div className="flex gap-2">
+          <input
+            type={showKey ? 'text' : 'password'}
+            value={apiKey}
+            onChange={(e) => saveKey(e.target.value)}
+            placeholder="sk-ant-..."
+            className="flex-1 text-xs px-3 py-2 rounded-xl border-2 border-amber-200 focus:outline-none focus:border-amber-400 bg-white font-mono"
+          />
+          <button
+            onClick={() => setShowKey(v => !v)}
+            className="px-3 py-2 rounded-xl bg-amber-200 text-amber-800 text-xs font-black hover:bg-amber-300"
+          >
+            {showKey ? '🙈' : '👁'}
+          </button>
+        </div>
+        <p className="text-[10px] text-amber-600 mt-1">
+          キーは端末内にのみ保存されます（サーバーには送りません）
+        </p>
+      </div>
+
+      {/* Prompt input */}
+      <div className="flex flex-col gap-2">
+        <p className="text-sm font-black text-violet-700">💬 どんなものを作る？</p>
+        <textarea
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          placeholder="例：赤の2x4ブロックを3段積み上げて"
+          rows={3}
+          className="w-full text-sm px-4 py-3 rounded-2xl border-2 border-violet-200 focus:outline-none focus:border-violet-400 bg-white resize-none"
+          onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSend(); }}
+        />
+        <p className="text-[10px] text-gray-400">⌘+Enter で送信</p>
+      </div>
+
+      {/* Examples */}
+      <div>
+        <p className="text-[10px] font-black text-gray-400 mb-2">こんな指示が使えるよ👇</p>
+        <div className="flex flex-col gap-1.5">
+          {EXAMPLE_PROMPTS.map((ex) => (
+            <button
+              key={ex}
+              onClick={() => setPrompt(ex)}
+              className="text-left text-xs px-3 py-2 rounded-xl bg-violet-50 hover:bg-violet-100 text-violet-700 font-bold border border-violet-100 transition-colors"
+            >
+              {ex}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Error */}
+      {status === 'error' && (
+        <div className="bg-red-50 border-2 border-red-200 rounded-xl px-4 py-3 text-xs text-red-700 font-bold">
+          ❌ {error}
+        </div>
+      )}
+
+      {/* Send button */}
+      <button
+        onClick={handleSend}
+        disabled={status === 'loading'}
+        className={[
+          'py-4 rounded-2xl font-black text-lg text-white shadow-xl transition-all flex items-center justify-center gap-3',
+          status === 'loading'
+            ? 'bg-gray-300 cursor-not-allowed'
+            : 'bg-gradient-to-r from-violet-500 to-pink-500 hover:from-violet-600 hover:to-pink-600 hover:scale-[1.02] active:scale-95',
+        ].join(' ')}
+      >
+        {status === 'loading' ? (
+          <><span className="animate-spin">⚙️</span><span>AIがかんがえています…</span></>
+        ) : (
+          <><span>🤖</span><span>AIにつくってもらう！</span></>
+        )}
+      </button>
+    </div>
+  );
+}
 
 // ─── Sub-screens ─────────────────────────────────────────────────────────────
 
@@ -416,6 +542,7 @@ function SuggestionResult({
 // ─── Main AIHelpMode ──────────────────────────────────────────────────────────
 
 export function AIHelpMode({ onImportBricks }: Props) {
+  const [topTab, setTopTab] = useState<TopTab>('text');
   const [subMode, setSubMode] = useState<AiCallMode>('copy');
   const [phase, setPhase] = useState<Phase>('menu');
   const [result, setResult] = useState<AiResult | null>(null);
@@ -465,8 +592,39 @@ export function AIHelpMode({ onImportBricks }: Props) {
         </div>
       </div>
 
-      {/* Phase content */}
-      <div className="flex-1 flex flex-col overflow-auto">
+      {/* Top tab bar */}
+      <div className="flex border-b-2 border-violet-100 flex-shrink-0 bg-white">
+        <button
+          onClick={() => setTopTab('text')}
+          className={[
+            'flex-1 py-2.5 text-xs font-black transition-colors',
+            topTab === 'text'
+              ? 'border-b-4 border-violet-500 text-violet-700 bg-violet-50'
+              : 'text-gray-400 hover:text-gray-600',
+          ].join(' ')}
+        >
+          💬 テキストで指示
+        </button>
+        <button
+          onClick={() => setTopTab('camera')}
+          className={[
+            'flex-1 py-2.5 text-xs font-black transition-colors',
+            topTab === 'camera'
+              ? 'border-b-4 border-violet-500 text-violet-700 bg-violet-50'
+              : 'text-gray-400 hover:text-gray-600',
+          ].join(' ')}
+        >
+          📸 カメラ・画像
+        </button>
+      </div>
+
+      {/* Text mode */}
+      {topTab === 'text' && (
+        <TextInputMode onImportBricks={onImportBricks} />
+      )}
+
+      {/* Camera mode — Phase content */}
+      {topTab === 'camera' && <div className="flex-1 flex flex-col overflow-auto">
         {phase === 'menu' && <ModeMenu onSelect={handleSelectMode} />}
 
         {phase === 'upload' && (
@@ -496,7 +654,7 @@ export function AIHelpMode({ onImportBricks }: Props) {
             onMenu={handleMenu}
           />
         )}
-      </div>
+      </div>}
     </div>
   );
 }
