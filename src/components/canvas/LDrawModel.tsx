@@ -11,7 +11,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import type { Group } from 'three';
+import type { Group, Mesh, Material } from 'three';
 import { createLDrawLoader, LDRAW_SCALE, LDRAW_Y_OFFSET } from '../../utils/ldrawLoader';
 
 export type LDrawStatus = 'idle' | 'loading' | 'done' | 'error';
@@ -59,6 +59,17 @@ export function LDrawModel({ partNumber, position = [0, 0, 0], onStatus }: Props
           console.warn('[LDrawModel] ⚠ No geometry found — subpart may have failed to load.');
           console.warn('  Make sure public/ldraw/parts/s/3001s01.dat exists and is accessible.');
         }
+
+        // Force all mesh materials to LEGO red
+        const LEGO_RED = '#e60012';
+        group.traverse((obj) => {
+          const mesh = obj as Mesh;
+          if (!mesh.isMesh || !mesh.material) return;
+          const mats: Material[] = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+          mats.forEach((mat) => {
+            if ('color' in mat) (mat as Material & { color: { set(c: string): void } }).color.set(LEGO_RED);
+          });
+        });
 
         groupRef.current = group;
         setModel(group);

@@ -16,7 +16,7 @@ import { LDrawLoader } from 'three/examples/jsm/loaders/LDrawLoader.js';
 import { LDrawConditionalLineMaterial } from 'three/examples/jsm/materials/LDrawConditionalLineMaterial.js';
 import type { Group } from 'three';
 
-/** Public base path — files must exist under public/ldraw/. */
+/** Local base path for the main part file (e.g. 3001.dat served from public/). */
 export const LDRAW_BASE_PATH = '/ldraw/';
 
 /** Scale factor: 20 LDU = 1 stud = 1 Three.js unit. */
@@ -27,7 +27,8 @@ export const LDRAW_Y_OFFSET = 24 * LDRAW_SCALE; // 1.2
 
 /**
  * Returns a configured LDrawLoader.
- * setPartsLibraryPath('/ldraw/') → subparts fetched from /ldraw/parts/…
+ * 3001.dat is fully self-contained (no subpart refs), so partsLibraryPath
+ * only matters for future parts that reference external subparts.
  */
 export function createLDrawLoader(): LDrawLoader {
   const loader = new LDrawLoader();
