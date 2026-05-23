@@ -205,14 +205,20 @@ export default function App() {
 
     commit(prev => {
       const result = [...prev];
+      const minY = Math.min(...templates.map(nb => nb.position[1]));
+      // Find the lowest brick and compute its snap landing point
+      const lowest = templates.reduce((a, b) => a.position[1] <= b.position[1] ? a : b);
+      const lRotated = lowest.rotY % 2 === 1;
+      const lsx = snapCenter(lowest.position[0], lRotated ? lowest.d : lowest.w);
+      const lsz = snapCenter(lowest.position[2], lRotated ? lowest.w : lowest.d);
+      const lowestCandidate = { ...lowest, position: [lsx, 0, lsz] as [number, number, number] };
+      const baseY = findSnapYByStuds(lowestCandidate, getConn(lowest.ldrawPartNumber ?? ''), result, getConn);
+
       for (const nb of templates) {
         const rotated = nb.rotY % 2 === 1;
-        const ew = rotated ? nb.d : nb.w;
-        const ed = rotated ? nb.w : nb.d;
-        const sx = snapCenter(nb.position[0], ew);
-        const sz = snapCenter(nb.position[2], ed);
-        const candidate = { ...nb, position: [sx, 0, sz] as [number, number, number] };
-        const sy = findSnapYByStuds(candidate, getConn(nb.ldrawPartNumber ?? ''), result, getConn);
+        const sx = snapCenter(nb.position[0], rotated ? nb.d : nb.w);
+        const sz = snapCenter(nb.position[2], rotated ? nb.w : nb.d);
+        const sy = baseY + (nb.position[1] - minY);
         result.push({ ...nb, position: [sx, sy, sz] as [number, number, number] });
       }
       return result;
