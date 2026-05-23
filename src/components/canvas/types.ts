@@ -30,10 +30,18 @@ export interface PlacedBrick {
   shapeType?: ShapeType;
   /** When set, this brick is rendered via LDrawLoader using the given part number. */
   ldrawPartNumber?: string;
+  /** Actual height in plate units from connection data; overrides h for snap calculations. */
+  connHeightPlates?: number;
 }
 
 /** Three.js units per 1 plate unit (= 3.2mm / 8mm LEGO ratio). */
 export const PLATE_H = 0.4;
+
+export interface PartConnection {
+  heightPlates: number;
+  studTop: [number, number][];
+  studBottom: [number, number][];
+}
 
 export function parseDimensions(name: string): { w: number; d: number; h: number } {
   const m = name.match(/(\d+)\s*[Xx]\s*(\d+)/);
@@ -53,9 +61,16 @@ export function makeId(): string {
   return Math.random().toString(36).slice(2, 9);
 }
 
-export function brickFromPart(part: LegoPart, placedCount: number): PlacedBrick {
+export function brickFromPart(
+  part: LegoPart,
+  placedCount: number,
+  getConn?: (pn: string) => PartConnection | undefined,
+): PlacedBrick {
+  const conn = getConn?.(part.ldrawPartNumber ?? part.partNumber);
   // part.dims overrides name-based parsing (used for motors, gears, etc.)
-  const { w, d, h } = part.dims ?? parseDimensions(part.partName);
+  const dims = part.dims ?? parseDimensions(part.partName);
+  const { w, d } = dims;
+  const h = conn?.heightPlates ?? dims.h;
   const col = placedCount % 6;
   const row = Math.floor(placedCount / 6);
   // Snap initial position to the correct stud subgrid for this brick's dimensions
@@ -72,6 +87,7 @@ export function brickFromPart(part: LegoPart, placedCount: number): PlacedBrick 
     rotY: 0,
     shapeType: part.shapeType,
     ldrawPartNumber: part.ldrawPartNumber,
+    connHeightPlates: conn?.heightPlates,
   };
 }
 
@@ -125,4 +141,69 @@ export function findSnapY(
   }
 
   return topY;
+}
+
+/**
+ * Stud-based snap: finds the highest Y where at least one of the candidate's
+ * bottom anti-studs aligns with a top stud of an existing brick.
+ * Falls back to findSnapY when connection data is missing or has no anti-studs.
+ */
+export function findSnapYByStuds(
+  candidate: PlacedBrick,
+  candidateConn: PartConnection | undefined,
+  others: PlacedBrick[],
+  getConn: (partNumber: string) => PartConnection | undefined,
+): number {
+  const SNAP_TOLERANCE = 0.35;
+
+  if (!candidateConn || candidateConn.studBottom.length === 0) {
+    return findSnapY(candidate, others);
+  }
+
+  const rotated = candidate.rotY % 2 === 1;
+  const [cx, , cz] = candidate.position;
+
+  const candidateBottomWorld = candidateConn.studBottom.map(([sx, sz]) => {
+    const rx = rotated ? sz : sx;
+    const rz = rotated ? -sx : sz;
+    return [cx + rx, cz + rz] as [number, number];
+  });
+
+  let bestY = 0;
+
+  for (const other of others) {
+    if (other.id === candidate.id) continue;
+    const otherConn = getConn(other.ldrawPartNumber ?? '');
+    if (!otherConn || otherConn.studTop.length === 0) continue;
+
+    const otherRotated = other.rotY % 2 === 1;
+    const [ox, , oz] = other.position;
+    const otherH = (other.connHeightPlates ?? otherConn.heightPlates ?? other.h) * PLATE_H;
+    const otherTopY = other.position[1] * PLATE_H + otherH;
+
+    const otherTopWorld = otherConn.studTop.map(([sx, sz]) => {
+      const rx = otherRotated ? sz : sx;
+      const rz = otherRotated ? -sx : sz;
+      return [ox + rx, oz + rz] as [number, number];
+    });
+
+    let matched = false;
+    outer: for (const [abx, abz] of candidateBottomWorld) {
+      for (const [stx, stz] of otherTopWorld) {
+        const dx = abx - stx;
+        const dz = abz - stz;
+        if (dx * dx + dz * dz < SNAP_TOLERANCE * SNAP_TOLERANCE) {
+          matched = true;
+          break outer;
+        }
+      }
+    }
+
+    if (matched) {
+      const snapY = otherTopY / PLATE_H;
+      if (snapY > bestY) bestY = snapY;
+    }
+  }
+
+  return bestY;
 }

@@ -5,8 +5,8 @@ import { OrbitControls, Grid } from '@react-three/drei';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import * as THREE from 'three';
 import { LegoBrick3D } from './LegoBrick3D';
-import { findSnapY, snapCenter, PLATE_H } from './types';
-import type { PlacedBrick } from './types';
+import { findSnapYByStuds, snapCenter, PLATE_H } from './types';
+import type { PlacedBrick, PartConnection } from './types';
 
 const PLATE_SIZE = 32;
 const GAP = 0.06;
@@ -28,6 +28,7 @@ interface Props {
   onMove: (id: string, pos: [number, number, number]) => void;
   onMoveBricks: (moves: { id: string; pos: [number, number, number] }[]) => void;
   onUpdateBrickHeight?: (id: string, h: number) => void;
+  getConn?: (partNumber: string) => PartConnection | undefined;
 }
 
 interface CompanionDrag {
@@ -371,7 +372,7 @@ function Baseplate({
 }
 
 // ── LegoCanvas (main) ─────────────────────────────────────────────────────────
-export function LegoCanvas({ bricks, selectedIds, onSelect, onSelectMany, onDeselect, onMove, onMoveBricks, onUpdateBrickHeight }: Props) {
+export function LegoCanvas({ bricks, selectedIds, onSelect, onSelectMany, onDeselect, onMove, onMoveBricks, onUpdateBrickHeight, getConn }: Props) {
   const orbitRef      = useRef<OrbitControlsImpl>(null!);
   const containerRef  = useRef<HTMLDivElement>(null);
   const isPanModeRef  = useRef(false);           // true while Space/Shift is held
@@ -397,6 +398,7 @@ export function LegoCanvas({ bricks, selectedIds, onSelect, onSelectMany, onDese
   const bricksRef      = useRef(bricks);     bricksRef.current      = bricks;
   const selectedIdsRef = useRef(selectedIds); selectedIdsRef.current = selectedIds;
   const dragStateRef   = useRef(dragState);   dragStateRef.current   = dragState;
+  const getConnRef     = useRef(getConn);     getConnRef.current     = getConn;
 
   // ── Space / Shift → left-button pan mode ───────────────────────────────────
   useEffect(() => {
@@ -453,7 +455,8 @@ export function LegoCanvas({ bricks, selectedIds, onSelect, onSelectMany, onDese
     const snapZ = snapCenter(rawPos[2], ed);
     const movingIds = [ds.id, ...companions.map(c => c.id)];
     const others = bricksRef.current.filter(b => !movingIds.includes(b.id));
-    const snapY = findSnapY({ ...brick, position: [snapX, 0, snapZ] }, others);
+    const gc = getConnRef.current ?? (() => undefined);
+    const snapY = findSnapYByStuds({ ...brick, position: [snapX, 0, snapZ] }, gc(brick.ldrawPartNumber ?? ''), others, gc);
     const newPos: [number, number, number] = [snapX, snapY, snapZ];
     ghostPosRef.current = newPos;
     setGhostPosDisplay(newPos);
@@ -462,7 +465,7 @@ export function LegoCanvas({ bricks, selectedIds, onSelect, onSelectMany, onDese
       const newComp = companions.map(c => {
         const cx = snapCenter(snapX + c.dx, c.brick.rotY % 2 === 1 ? c.brick.d : c.brick.w);
         const cz = snapCenter(snapZ + c.dz, c.brick.rotY % 2 === 1 ? c.brick.w : c.brick.d);
-        const cy = findSnapY({ ...c.brick, position: [cx, 0, cz] }, others.filter(b => b.id !== c.id));
+        const cy = findSnapYByStuds({ ...c.brick, position: [cx, 0, cz] }, gc(c.brick.ldrawPartNumber ?? ''), others.filter(b => b.id !== c.id), gc);
         return { id: c.id, pos: [cx, cy, cz] as [number, number, number] };
       });
       companionGhostsRef.current = newComp;

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { LegoPart } from '../../data/parts';
 import { PART_COLOR_HEX, LIGHT_COLORS } from '../../data/colors';
+import type { PartConnection } from '../canvas/types';
 import { LegoCanvas } from '../canvas/LegoCanvas';
 import type { PlacedBrick } from '../canvas/types';
 import { PartIcon } from '../canvas/PartIcon';
@@ -16,6 +17,7 @@ interface Props {
   onMoveBricks: (moves: { id: string; pos: [number, number, number] }[]) => void;
   onChangeColor: (ids: string[], colorName: string) => void;
   onUpdateBrickHeight?: (id: string, h: number) => void;
+  getConn?: (partNumber: string) => PartConnection | undefined;
 }
 
 // ── Catalog types ─────────────────────────────────────────────────────────────
@@ -204,6 +206,7 @@ export function BuildMode({
   onMoveBricks,
   onChangeColor,
   onUpdateBrickHeight,
+  getConn,
 }: Props) {
   const [search, setSearch] = useState('');
   const [ldrawParts, setLdrawParts] = useState<LegoPart[]>([]);
@@ -269,6 +272,7 @@ export function BuildMode({
           onMove={onMoveBrick}
           onMoveBricks={onMoveBricks}
           onUpdateBrickHeight={onUpdateBrickHeight}
+          getConn={getConn}
         />
 
         {/* ── Floating color palette (shown when bricks are selected) ── */}

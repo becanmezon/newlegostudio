@@ -2,8 +2,8 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { BuildMode } from './components/modes/BuildMode';
 import { AIHelpMode } from './components/modes/AIHelpMode';
 import { TogetherMode } from './components/modes/TogetherMode';
-import { brickFromPart, findSnapY, snapCenter, makeId } from './components/canvas/types';
-import type { PlacedBrick } from './components/canvas/types';
+import { brickFromPart, findSnapYByStuds, snapCenter, makeId } from './components/canvas/types';
+import type { PlacedBrick, PartConnection } from './components/canvas/types';
 import type { LegoPart } from './data/parts';
 import { PART_COLOR_HEX } from './data/colors';
 import { playBrickSnap, playSuccess } from './utils/sounds';
@@ -21,6 +21,9 @@ const EMPTY: HistoryState = { bricks: [], past: [], future: [] };
 export default function App() {
   const [mode, setMode] = useState<Mode>('build');
   const [hs, setHs] = useState<HistoryState>(EMPTY);
+  const [connections, setConnections] = useState<Record<string, PartConnection>>({});
+  const connectionsRef = useRef<Record<string, PartConnection>>({});
+  connectionsRef.current = connections;
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [clipboard, setClipboard] = useState<PlacedBrick[] | null>(null);
 
@@ -38,6 +41,15 @@ export default function App() {
   const clipboardRef = useRef<PlacedBrick[] | null>(null);
   clipboardRef.current = clipboard;
   const pasteOffsetRef = useRef(1);
+
+  const getConn = useCallback((pn: string) => connectionsRef.current[pn], []);
+
+  useEffect(() => {
+    fetch('/data/part-connections.json')
+      .then(r => r.json())
+      .then(setConnections)
+      .catch(console.error);
+  }, []);
 
   // ── History primitives ───────────────────────────────────────────────────────
 
@@ -88,14 +100,14 @@ export default function App() {
   // ── Brick mutations ──────────────────────────────────────────────────────────
 
   const addBrick = useCallback((part: LegoPart): string => {
-    const brick = brickFromPart(part, brickCountRef.current);
+    const brick = brickFromPart(part, brickCountRef.current, getConn);
     commit(prev => {
-      const snapY = findSnapY(brick, prev);
+      const snapY = findSnapYByStuds(brick, getConn(brick.ldrawPartNumber ?? ''), prev, getConn);
       return [...prev, { ...brick, position: [brick.position[0], snapY, brick.position[2]] }];
     });
     playBrickSnap();
     return brick.id;
-  }, [commit]);
+  }, [commit, getConn]);
 
   const moveBrick = useCallback((id: string, pos: [number, number, number]) => {
     commit(prev => {
@@ -106,10 +118,12 @@ export default function App() {
       const ed = rotated ? brick.w : brick.d;
       const sx = snapCenter(pos[0], ew);
       const sz = snapCenter(pos[2], ed);
-      const sy = findSnapY({ ...brick, position: [sx, 0, sz] }, prev.filter(b => b.id !== id));
+      const others = prev.filter(b => b.id !== id);
+      const candidate = { ...brick, position: [sx, 0, sz] as [number, number, number] };
+      const sy = findSnapYByStuds(candidate, getConn(brick.ldrawPartNumber ?? ''), others, getConn);
       return prev.map(b => b.id === id ? { ...b, position: [sx, sy, sz] as [number, number, number] } : b);
     });
-  }, [commit]);
+  }, [commit, getConn]);
 
   const moveBricks = useCallback((moves: { id: string; pos: [number, number, number] }[]) => {
     commit(prev => {
@@ -124,12 +138,13 @@ export default function App() {
         const sx = snapCenter(pos[0], ew);
         const sz = snapCenter(pos[2], ed);
         const others = next.filter(b => !movingIds.includes(b.id));
-        const sy = findSnapY({ ...brick, position: [sx, 0, sz] }, others);
+        const candidate = { ...brick, position: [sx, 0, sz] as [number, number, number] };
+        const sy = findSnapYByStuds(candidate, getConn(brick.ldrawPartNumber ?? ''), others, getConn);
         next = next.map(b => b.id === id ? { ...b, position: [sx, sy, sz] as [number, number, number] } : b);
       }
       return next;
     });
-  }, [commit]);
+  }, [commit, getConn]);
 
   // Batch-rotate all selected bricks in one history commit
   const rotateSelected = useCallback(() => {
@@ -146,17 +161,15 @@ export default function App() {
         const ed = rotated ? b.w : b.d;
         const sx = snapCenter(b.position[0], ew);
         const sz = snapCenter(b.position[2], ed);
-        const sy = findSnapY(
-          { ...b, rotY: newRotY, position: [sx, 0, sz] },
-          next.filter(o => o.id !== id),
-        );
+        const candidate = { ...b, rotY: newRotY, position: [sx, 0, sz] as [number, number, number] };
+        const sy = findSnapYByStuds(candidate, getConn(b.ldrawPartNumber ?? ''), next.filter(o => o.id !== id), getConn);
         next = next.map(x =>
           x.id === id ? { ...x, rotY: newRotY, position: [sx, sy, sz] as [number, number, number] } : x,
         );
       }
       return next;
     });
-  }, [commit]);
+  }, [commit, getConn]);
 
   const deleteSelected = useCallback(() => {
     const ids = selectedIdsRef.current;
@@ -198,7 +211,8 @@ export default function App() {
         const ed = rotated ? nb.w : nb.d;
         const sx = snapCenter(nb.position[0], ew);
         const sz = snapCenter(nb.position[2], ed);
-        const sy = findSnapY({ ...nb, position: [sx, 0, sz] }, result);
+        const candidate = { ...nb, position: [sx, 0, sz] as [number, number, number] };
+        const sy = findSnapYByStuds(candidate, getConn(nb.ldrawPartNumber ?? ''), result, getConn);
         result.push({ ...nb, position: [sx, sy, sz] as [number, number, number] });
       }
       return result;
@@ -206,7 +220,7 @@ export default function App() {
 
     setSelectedIds(newIds);
     playBrickSnap();
-  }, [commit]);
+  }, [commit, getConn]);
 
   const changeColor = useCallback((ids: string[], colorName: string) => {
     commit(prev => prev.map(b =>
@@ -395,6 +409,7 @@ export default function App() {
             onMoveBricks={moveBricks}
             onChangeColor={changeColor}
             onUpdateBrickHeight={updateBrickHeight}
+            getConn={getConn}
           />
         )}
         {mode === 'ai' && <AIHelpMode onImportBricks={importBricks} />}
