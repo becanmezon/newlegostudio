@@ -27,6 +27,7 @@ interface Props {
   onDeselect: () => void;
   onMove: (id: string, pos: [number, number, number]) => void;
   onMoveBricks: (moves: { id: string; pos: [number, number, number] }[]) => void;
+  onUpdateBrickHeight?: (id: string, h: number) => void;
 }
 
 interface CompanionDrag {
@@ -370,7 +371,7 @@ function Baseplate({
 }
 
 // ── LegoCanvas (main) ─────────────────────────────────────────────────────────
-export function LegoCanvas({ bricks, selectedIds, onSelect, onSelectMany, onDeselect, onMove, onMoveBricks }: Props) {
+export function LegoCanvas({ bricks, selectedIds, onSelect, onSelectMany, onDeselect, onMove, onMoveBricks, onUpdateBrickHeight }: Props) {
   const orbitRef      = useRef<OrbitControlsImpl>(null!);
   const containerRef  = useRef<HTMLDivElement>(null);
   const isPanModeRef  = useRef(false);           // true while Space/Shift is held
@@ -593,6 +594,7 @@ export function LegoCanvas({ bricks, selectedIds, onSelect, onSelectMany, onDese
             onSelect={onSelect}
             onDragStart={handleBrickDragStart}
             isDragging={draggingIds.includes(brick.id)}
+            onUpdateHeight={onUpdateBrickHeight}
           />
         ))}
 

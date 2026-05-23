@@ -15,6 +15,7 @@ interface Props {
   onMoveBrick: (id: string, pos: [number, number, number]) => void;
   onMoveBricks: (moves: { id: string; pos: [number, number, number] }[]) => void;
   onChangeColor: (ids: string[], colorName: string) => void;
+  onUpdateBrickHeight?: (id: string, h: number) => void;
 }
 
 // ── Catalog types ─────────────────────────────────────────────────────────────
@@ -202,6 +203,7 @@ export function BuildMode({
   onMoveBrick,
   onMoveBricks,
   onChangeColor,
+  onUpdateBrickHeight,
 }: Props) {
   const [search, setSearch] = useState('');
   const [ldrawParts, setLdrawParts] = useState<LegoPart[]>([]);
@@ -266,6 +268,7 @@ export function BuildMode({
           onDeselect={onDeselect}
           onMove={onMoveBrick}
           onMoveBricks={onMoveBricks}
+          onUpdateBrickHeight={onUpdateBrickHeight}
         />
 
         {/* ── Floating color palette (shown when bricks are selected) ── */}

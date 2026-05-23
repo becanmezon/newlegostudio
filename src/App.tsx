@@ -216,6 +216,13 @@ export default function App() {
     ));
   }, [commit]);
 
+  const updateBrickHeight = useCallback((id: string, h: number) => {
+    setHs(prev => ({
+      ...prev,
+      bricks: prev.bricks.map(b => b.id === id && b.h !== h ? { ...b, h } : b),
+    }));
+  }, []);
+
   // ── AI import — staggered animation, history reset ────────────────────────
   const importBricks = useCallback((newBricks: PlacedBrick[]) => {
     setHs(EMPTY);
@@ -387,6 +394,7 @@ export default function App() {
             onMoveBrick={moveBrick}
             onMoveBricks={moveBricks}
             onChangeColor={changeColor}
+            onUpdateBrickHeight={updateBrickHeight}
           />
         )}
         {mode === 'ai' && <AIHelpMode onImportBricks={importBricks} />}

@@ -105,9 +105,10 @@ interface Props {
   onSelect: (id: string, additive: boolean) => void;
   onDragStart?: (brick: PlacedBrick) => void;
   isDragging?: boolean;
+  onUpdateHeight?: (id: string, h: number) => void;
 }
 
-export function LegoBrick3D({ brick, selected, onSelect, onDragStart, isDragging = false }: Props) {
+export function LegoBrick3D({ brick, selected, onSelect, onDragStart, isDragging = false, onUpdateHeight }: Props) {
   const { w, d, h, position, colorHex, rotY, partName, shapeType, ldrawPartNumber } = brick;
   const glowRef = useRef<THREE.Mesh>(null!);
   const pointerDownXY = useRef<[number, number] | null>(null);
@@ -195,8 +196,8 @@ export function LegoBrick3D({ brick, selected, onSelect, onDragStart, isDragging
           <LDrawModel
             partNumber={ldrawPartNumber}
             position={[0, 0, 0]}
-            yOffset={renderH}
             color={colorHex}
+            onLoad={(h) => onUpdateHeight?.(brick.id, h)}
             onStatus={setLdrawStatus}
           />
           {/* ── Loading / error placeholders ─────────────────────────────── */}
