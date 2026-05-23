@@ -6,68 +6,58 @@
  *   LDraw +Y is DOWN  →  rotate π around X to flip
  *   Brick height = 24 LDU = 1.2 Three.js units (3 plates × 0.4)
  *
- * After scale(1/20) + rotateX(π):
- *   LDraw origin (top of part) → Three.js y = 0
- *   Brick bottom (y = 24 LDU)  → Three.js y = −1.2
- * Add LDRAW_Y_OFFSET (+1.2) so the bottom sits on the baseplate (y = 0).
+ * Parts are fetched from the gkjohnson/ldraw-parts-library CDN at runtime.
+ * The shared loader is initialised once (materials preloaded), then reused for
+ * all subsequent part loads so color definitions are resolved correctly.
  */
 
 import { LDrawLoader } from 'three/examples/jsm/loaders/LDrawLoader.js';
 import { LDrawConditionalLineMaterial } from 'three/examples/jsm/materials/LDrawConditionalLineMaterial.js';
-import type { Group } from 'three';
 
-/** Local base path for the main part file (e.g. 3001.dat served from public/). */
-export const LDRAW_BASE_PATH = '/ldraw/';
+/** CDN base — must end with a slash. */
+export const CDN_BASE =
+  'https://raw.githubusercontent.com/gkjohnson/ldraw-parts-library/master/complete/ldraw/';
+
+/** LDraw color definitions (official LEGO palette). */
+const CDN_COLORS =
+  'https://raw.githubusercontent.com/gkjohnson/ldraw-parts-library/master/colors/ldcfgalt.ldr';
 
 /** Scale factor: 20 LDU = 1 stud = 1 Three.js unit. */
 export const LDRAW_SCALE = 1 / 20;
 
-/** Y-offset so the brick bottom aligns with y = 0 (the baseplate). */
-export const LDRAW_Y_OFFSET = 24 * LDRAW_SCALE; // 1.2
+/** Y-offset so the brick bottom aligns with y = 0 (the baseplate).
+ *  Equals 24 LDU × 1/20 = 1.2 for a standard brick. */
+export const LDRAW_Y_OFFSET = 24 * LDRAW_SCALE;
 
-/**
- * Returns a configured LDrawLoader.
- * 3001.dat is fully self-contained (no subpart refs), so partsLibraryPath
- * only matters for future parts that reference external subparts.
- */
-export function createLDrawLoader(): LDrawLoader {
-  const loader = new LDrawLoader();
-  loader.setPartsLibraryPath(LDRAW_BASE_PATH);
-  loader.setConditionalLineMaterial(LDrawConditionalLineMaterial);
-  loader.smoothNormals = true;
-
-  console.log('[ldrawLoader] createLDrawLoader:',
-    'partsLibraryPath =', loader.partsLibraryPath,
-    '| smoothNormals =', loader.smoothNormals);
-
-  return loader;
+/** Full CDN URL for a given part ID, e.g. "3001" → "…/parts/3001.dat". */
+export function buildPartUrl(partId: string): string {
+  return `${CDN_BASE}parts/${partId}.dat`;
 }
 
-/**
- * Promise-based helper (for non-R3F usage).
- * Returns a raw THREE.Group with NO transforms applied.
- * Use LDRAW_SCALE + LDRAW_Y_OFFSET when placing in the scene.
- *
- * @param partNumber  e.g. "3001" → loads /ldraw/parts/3001.dat
- */
-export async function loadLDrawPart(partNumber: string): Promise<Group> {
-  const url = `${LDRAW_BASE_PATH}parts/${partNumber}.dat`;
+// ── Singleton loader ──────────────────────────────────────────────────────────
+// A single LDrawLoader instance is shared across all LDrawModel components.
+// preloadMaterials() is called once so every subsequent load resolves color codes
+// against the official LEGO palette without an extra network round-trip.
 
-  // Sanity-check: verify the file is reachable before handing to LDrawLoader
-  console.log('[ldrawLoader] loadLDrawPart: fetching', url);
-  const check = await fetch(url, { method: 'HEAD' });
-  if (!check.ok) {
-    throw new Error(
-      `[ldrawLoader] ${url} returned HTTP ${check.status}. ` +
-      `Make sure the file is in public/ldraw/parts/${partNumber}.dat`,
-    );
+let _loaderReady: Promise<LDrawLoader> | null = null;
+
+export function getSharedLoader(): Promise<LDrawLoader> {
+  if (!_loaderReady) {
+    const loader = new LDrawLoader();
+    loader.setPartsLibraryPath(CDN_BASE);
+    loader.setConditionalLineMaterial(LDrawConditionalLineMaterial);
+    loader.smoothNormals = true;
+
+    // preloadMaterials exists in three r137+ but is not yet in the .d.ts
+    _loaderReady = (loader as unknown as { preloadMaterials(url: string): Promise<void> })
+      .preloadMaterials(CDN_COLORS)
+      .then(() => loader)
+      .catch((err: unknown) => {
+        // Material preload failure is non-fatal — parts still render with defaults.
+        console.warn('[ldrawLoader] preloadMaterials failed (parts will use default colors):', err);
+        _loaderReady = null; // allow a fresh attempt next time
+        return loader;
+      });
   }
-  console.log('[ldrawLoader] HEAD check OK:', check.status);
-
-  const loader = createLDrawLoader();
-  return new Promise<Group>((resolve, reject) => {
-    loader.load(url, resolve, undefined, (err) => {
-      reject(err instanceof Error ? err : new Error(String(err)));
-    });
-  });
+  return _loaderReady;
 }

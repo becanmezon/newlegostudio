@@ -1,13 +1,9 @@
-import { useCallback, useState } from 'react';
-import { legoParts } from '../../data/parts';
+import { useEffect, useState } from 'react';
 import type { LegoPart } from '../../data/parts';
-import { PART_COLOR_HEX } from '../../data/colors';
+import { PART_COLOR_HEX, LIGHT_COLORS } from '../../data/colors';
 import { LegoCanvas } from '../canvas/LegoCanvas';
 import type { PlacedBrick } from '../canvas/types';
-import { getCategory } from '../canvas/types';
-import type { PartCategory } from '../canvas/types';
 import { PartIcon } from '../canvas/PartIcon';
-import type { LDrawStatus } from '../canvas/LDrawModel';
 
 interface Props {
   bricks: PlacedBrick[];
@@ -18,9 +14,84 @@ interface Props {
   onAddBrick: (part: LegoPart) => string;
   onMoveBrick: (id: string, pos: [number, number, number]) => void;
   onMoveBricks: (moves: { id: string; pos: [number, number, number] }[]) => void;
+  onChangeColor: (ids: string[], colorName: string) => void;
 }
 
-// Keyboard hint shown while a brick is selected
+// ── Catalog types ─────────────────────────────────────────────────────────────
+interface CatalogItem {
+  id: string;
+  name: string;
+  category: string;
+}
+
+function dimsFromCatalogItem(item: CatalogItem): { w: number; d: number; h: number } {
+  const isPlate = /プレート|薄型|plate/i.test(item.name);
+  const h = isPlate ? 1 : 3;
+  const m = item.name.match(/(\d+)[xX×](\d+)/);
+  if (m) {
+    const a = parseInt(m[1]);
+    const b = parseInt(m[2]);
+    return { w: Math.max(a, b), d: Math.min(a, b), h };
+  }
+  return { w: 1, d: 1, h };
+}
+
+// idx makes each LegoPart.id unique even when item.id has non-numeric characters
+function catalogItemToLegoPart(item: CatalogItem, idx: number, colorName: string): LegoPart {
+  return {
+    id: idx,
+    partNumber: item.id,
+    quantity: 99,
+    color: colorName,
+    partName: item.name,
+    dims: dimsFromCatalogItem(item),
+    ldrawPartNumber: item.id,
+  };
+}
+
+const COLOR_NAMES = Object.keys(PART_COLOR_HEX);
+const DEFAULT_COLOR = 'Bright Red';
+
+// ── ColorPalette ──────────────────────────────────────────────────────────────
+function ColorPalette({
+  selectedColor,
+  dotSize = 'sm',
+  onSelect,
+}: {
+  selectedColor: string;
+  dotSize?: 'sm' | 'md';
+  onSelect: (name: string) => void;
+}) {
+  const cls = dotSize === 'md' ? 'w-6 h-6' : 'w-4 h-4';
+  return (
+    <div className="flex flex-wrap gap-1">
+      {COLOR_NAMES.map((name) => {
+        const hex = PART_COLOR_HEX[name];
+        const active = name === selectedColor;
+        const light = LIGHT_COLORS.has(name);
+        return (
+          <button
+            key={name}
+            title={name}
+            onClick={() => onSelect(name)}
+            className={[
+              cls,
+              'rounded-full border-2 transition-all active:scale-90 flex-shrink-0',
+              active
+                ? 'scale-110 border-white ring-2 ring-blue-500 ring-offset-1'
+                : light
+                ? 'border-gray-300 hover:scale-110'
+                : 'border-white/50 hover:scale-110 hover:border-white',
+            ].join(' ')}
+            style={{ background: hex }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Keyboard hint ─────────────────────────────────────────────────────────────
 function KeyHint() {
   return (
     <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
@@ -35,40 +106,28 @@ function KeyHint() {
   );
 }
 
-type CategoryFilter = PartCategory | 'all';
-
-const CATEGORY_TABS: { id: CategoryFilter; emoji: string; label: string }[] = [
-  { id: 'all',     emoji: '🧱', label: 'すべて'   },
-  { id: 'brick',   emoji: '🟥', label: 'ブロック' },
-  { id: 'plate',   emoji: '⬛', label: 'プレート' },
-  { id: 'roof',    emoji: '🏠', label: 'やね'     },
-  { id: 'round',   emoji: '⭕', label: 'まるい'   },
-  { id: 'frame',   emoji: '🪟', label: 'まど'     },
-  { id: 'power',   emoji: '⚙️', label: 'どうりょく' },
-  { id: 'gear',    emoji: '🔩', label: 'ギア'     },
-  { id: 'special', emoji: '⭐', label: 'とくしゅ' },
-];
-
-// ── Parts sidebar ────────────────────────────────────────────────────────────
+// ── Parts sidebar ─────────────────────────────────────────────────────────────
 function PartsSidebar({
   search,
+  ldrawParts,
+  selectedColor,
   onSearchChange,
   onAddPart,
+  onSelectColor,
 }: {
   search: string;
+  ldrawParts: LegoPart[];
+  selectedColor: string;
   onSearchChange: (v: string) => void;
   onAddPart: (part: LegoPart) => void;
+  onSelectColor: (name: string) => void;
 }) {
-  const [category, setCategory] = useState<CategoryFilter>('all');
-
-  const filtered = legoParts.filter((p) => {
-    const matchSearch =
+  const filtered = ldrawParts.filter(
+    (p) =>
       !search ||
       p.partName.toLowerCase().includes(search.toLowerCase()) ||
-      p.partNumber.includes(search);
-    const matchCat = category === 'all' || getCategory(p.partName) === category;
-    return matchSearch && matchCat;
-  });
+      p.partNumber.includes(search),
+  );
 
   return (
     <aside className="w-52 flex flex-col bg-amber-50 border-r-4 border-amber-200 flex-shrink-0 overflow-hidden">
@@ -76,6 +135,12 @@ function PartsSidebar({
       <div className="bg-amber-400 px-3 py-2 flex-shrink-0">
         <p className="font-black text-amber-900 text-sm">🎲 パーツをえらぼう</p>
         <p className="text-amber-700 text-xs mt-0.5">クリックまたはドラッグ</p>
+      </div>
+
+      {/* Color palette */}
+      <div className="px-2 pt-2 pb-1 flex-shrink-0 border-b border-amber-200">
+        <p className="text-[10px] font-black text-amber-700 mb-1.5">🎨 いろをえらぼう</p>
+        <ColorPalette selectedColor={selectedColor} dotSize="sm" onSelect={onSelectColor} />
       </div>
 
       {/* Search */}
@@ -89,30 +154,10 @@ function PartsSidebar({
         />
       </div>
 
-      {/* Category tabs */}
-      <div className="flex gap-1 overflow-x-auto px-2 pb-1.5 flex-shrink-0 scrollbar-hide">
-        {CATEGORY_TABS.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setCategory(tab.id)}
-            className={[
-              'flex-shrink-0 flex flex-col items-center px-2 py-1 rounded-lg transition-colors cursor-pointer select-none',
-              category === tab.id
-                ? 'bg-amber-400 text-amber-900'
-                : 'bg-white text-gray-500 hover:bg-amber-100',
-            ].join(' ')}
-          >
-            <span className="text-sm leading-none">{tab.emoji}</span>
-            <span className="text-[9px] font-black leading-tight mt-0.5 whitespace-nowrap">{tab.label}</span>
-          </button>
-        ))}
-      </div>
-
       {/* Parts list */}
-      <div className="flex-1 overflow-y-auto px-2 pb-2 flex flex-col gap-1.5">
+      <div className="flex-1 overflow-y-auto px-2 pb-2 flex flex-col gap-1.5 pt-1">
         {filtered.map((part) => {
-          const hex = PART_COLOR_HEX[part.color] ?? '#999';
-          const cat = getCategory(part.partName);
+          const hex = PART_COLOR_HEX[selectedColor] ?? '#c91a09';
           return (
             <div
               key={part.id}
@@ -126,16 +171,19 @@ function PartsSidebar({
               className="flex items-center gap-2 p-1.5 rounded-xl bg-white hover:bg-amber-100 cursor-pointer active:scale-95 transition-all shadow-sm border border-amber-100 select-none"
             >
               <div className="w-9 h-9 rounded-lg flex-shrink-0 border border-black/10 overflow-hidden bg-white/60">
-                <PartIcon category={cat} color={hex} size={36} />
+                <PartIcon category={(part.dims?.h ?? 3) === 1 ? 'plate' : 'brick'} color={hex} size={36} />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-bold text-gray-700 leading-tight truncate">{part.partName}</p>
-                <p className="text-xs text-gray-400">×{part.quantity}</p>
+                <p className="text-[10px] text-blue-500 font-bold">#{part.partNumber}</p>
               </div>
             </div>
           );
         })}
-        {filtered.length === 0 && (
+        {ldrawParts.length === 0 && (
+          <p className="text-center text-xs text-gray-400 py-6">読み込み中…</p>
+        )}
+        {ldrawParts.length > 0 && filtered.length === 0 && (
           <p className="text-center text-xs text-gray-400 py-6">みつからないよ…</p>
         )}
       </div>
@@ -143,7 +191,7 @@ function PartsSidebar({
   );
 }
 
-// ── Main BuildMode ────────────────────────────────────────────────────────────
+// ── Main BuildMode ─────────────────────────────────────────────────────────────
 export function BuildMode({
   bricks,
   selectedIds,
@@ -153,41 +201,61 @@ export function BuildMode({
   onAddBrick,
   onMoveBrick,
   onMoveBricks,
+  onChangeColor,
 }: Props) {
   const [search, setSearch] = useState('');
-  const [ldrawTest, setLdrawTest] = useState<string | null>(null);
-  const [ldrawStatus, setLdrawStatus] = useState<LDrawStatus>('idle');
-  const [ldrawError, setLdrawError] = useState<string | null>(null);
+  const [ldrawParts, setLdrawParts] = useState<LegoPart[]>([]);
+  const [selectedColor, setSelectedColor] = useState(DEFAULT_COLOR);
 
-  const handleLDrawStatus = useCallback((s: LDrawStatus, detail?: string) => {
-    setLdrawStatus(s);
-    setLdrawError(detail ?? null);
+  useEffect(() => {
+    fetch('/data/parts-catalog.json')
+      .then((r) => r.json())
+      .then((items: CatalogItem[]) =>
+        setLdrawParts(items.map((item, idx) => catalogItemToLegoPart(item, idx, DEFAULT_COLOR)))
+      )
+      .catch((err) => console.error('[BuildMode] catalog fetch failed:', err));
   }, []);
 
   const hasSelection = selectedIds.length > 0;
 
+  // Called from sidebar palette or floating palette
+  const handleColorSelect = (colorName: string) => {
+    setSelectedColor(colorName);
+    if (selectedIds.length > 0) {
+      onChangeColor(selectedIds, colorName);
+    }
+  };
+
+  // Apply the currently-selected color when adding a part
   const handleAddPart = (part: LegoPart) => {
-    const id = onAddBrick(part);
+    const coloredPart: LegoPart = { ...part, color: selectedColor };
+    const id = onAddBrick(coloredPart);
     onSelect(id, false);
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     const partId = parseInt(e.dataTransfer.getData('partId'));
-    const part = legoParts.find((p) => p.id === partId);
+    const part = ldrawParts.find((p) => p.id === partId);
     if (part) handleAddPart(part);
   };
 
   return (
     <div className="flex h-full">
-      <PartsSidebar search={search} onSearchChange={setSearch} onAddPart={handleAddPart} />
+      <PartsSidebar
+        search={search}
+        ldrawParts={ldrawParts}
+        selectedColor={selectedColor}
+        onSearchChange={setSearch}
+        onAddPart={handleAddPart}
+        onSelectColor={handleColorSelect}
+      />
 
       <div
         className="flex-1 relative overflow-hidden"
         onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }}
         onDrop={handleDrop}
       >
-        {/* Keyboard hint — shown while a brick is selected */}
         {hasSelection && <KeyHint />}
 
         <LegoCanvas
@@ -198,9 +266,23 @@ export function BuildMode({
           onDeselect={onDeselect}
           onMove={onMoveBrick}
           onMoveBricks={onMoveBricks}
-          ldrawTestPart={ldrawTest}
-          onLDrawStatus={handleLDrawStatus}
         />
+
+        {/* ── Floating color palette (shown when bricks are selected) ── */}
+        {hasSelection && (
+          <div className="absolute bottom-12 left-1/2 -translate-x-1/2 z-10">
+            <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border-2 border-amber-200 px-3 py-2 max-w-xs">
+              <p className="text-[10px] font-black text-amber-700 mb-1.5 text-center">
+                🎨 いろをかえる
+              </p>
+              <ColorPalette
+                selectedColor={selectedColor}
+                dotSize="md"
+                onSelect={handleColorSelect}
+              />
+            </div>
+          </div>
+        )}
 
         {bricks.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -219,42 +301,6 @@ export function BuildMode({
             🧱 {bricks.length} こ
           </div>
         )}
-
-        {/* LDraw test toggle — bottom-left */}
-        <div className="absolute bottom-3 left-3 z-10 flex flex-col gap-1 items-start">
-          <button
-            onClick={() => {
-              const next = ldrawTest ? null : '3001';
-              setLdrawTest(next);
-              if (!next) setLdrawStatus('idle');
-            }}
-            className={[
-              'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black shadow border-2 transition-all active:scale-95',
-              ldrawStatus === 'error'
-                ? 'bg-red-100 border-red-400 text-red-700'
-                : ldrawTest
-                  ? 'bg-orange-400 border-orange-600 text-white'
-                  : 'bg-white/90 border-gray-300 text-gray-600 hover:border-orange-400 hover:text-orange-600',
-            ].join(' ')}
-          >
-            <span>
-              {ldrawStatus === 'loading' ? '⏳' :
-               ldrawStatus === 'done'    ? '✅' :
-               ldrawStatus === 'error'   ? '❌' : '🧪'}
-            </span>
-            <span>
-              {ldrawStatus === 'loading' ? '読み込み中…' :
-               ldrawStatus === 'done'    ? 'LDraw 表示中 (3001)' :
-               ldrawStatus === 'error'   ? 'エラー（コンソール確認）' :
-               ldrawTest                 ? 'LDraw 非表示' : 'LDraw テスト (3001)'}
-            </span>
-          </button>
-          {ldrawStatus === 'error' && ldrawError && (
-            <div className="bg-red-50 border border-red-200 rounded-lg px-2 py-1 text-[10px] text-red-700 max-w-[220px] break-all shadow">
-              {ldrawError}
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );

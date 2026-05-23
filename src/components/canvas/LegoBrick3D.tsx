@@ -1,9 +1,52 @@
-import { useMemo, useRef } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import type { ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
+import { Html } from '@react-three/drei';
 import type { PlacedBrick } from './types';
 import { PLATE_H } from './types';
+import { LDrawModel } from './LDrawModel';
+import type { LDrawStatus } from './LDrawModel';
+
+// ── LDraw placeholder components ──────────────────────────────────────────────
+
+/** Rotating wireframe box shown while a CDN part is loading. */
+function SpinnerBox({ w, h, d }: { w: number; h: number; d: number }) {
+  const ref = useRef<THREE.Mesh>(null!);
+  useFrame((_, delta) => { ref.current.rotation.y += delta * 2.5; });
+  return (
+    <mesh ref={ref} position={[0, h / 2, 0]}>
+      <boxGeometry args={[w * 0.75, h * 0.75, d * 0.75]} />
+      <meshBasicMaterial color="#fbbf24" wireframe />
+    </mesh>
+  );
+}
+
+/** Red translucent box + label shown when a CDN part cannot be loaded. */
+function ErrorBox({ w, h, d }: { w: number; h: number; d: number }) {
+  return (
+    <group position={[0, h / 2, 0]}>
+      <mesh>
+        <boxGeometry args={[w, h, d]} />
+        <meshBasicMaterial color="#ef4444" transparent opacity={0.35} depthWrite={false} />
+      </mesh>
+      <Html center distanceFactor={4}>
+        <div style={{
+          background: '#ef4444',
+          color: '#fff',
+          padding: '2px 6px',
+          borderRadius: 4,
+          fontSize: 10,
+          fontWeight: 'bold',
+          whiteSpace: 'nowrap',
+          pointerEvents: 'none',
+        }}>
+          未対応パーツ
+        </div>
+      </Html>
+    </group>
+  );
+}
 
 const STUD_R = 0.28;
 const STUD_H = 0.18;   // taller for better LEGO look
@@ -65,10 +108,11 @@ interface Props {
 }
 
 export function LegoBrick3D({ brick, selected, onSelect, onDragStart, isDragging = false }: Props) {
-  const { w, d, h, position, colorHex, rotY, partName, shapeType } = brick;
+  const { w, d, h, position, colorHex, rotY, partName, shapeType, ldrawPartNumber } = brick;
   const glowRef = useRef<THREE.Mesh>(null!);
   const pointerDownXY = useRef<[number, number] | null>(null);
   const didDrag = useRef(false);
+  const [ldrawStatus, setLdrawStatus] = useState<LDrawStatus>('idle');
 
   const isSlope    = isSlopePart(partName);
   const isInverted = isSlope && /INV/i.test(partName);
@@ -145,47 +189,71 @@ export function LegoBrick3D({ brick, selected, onSelect, onDragStart, isDragging
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
     >
-      {/* ── Body ────────────────────────────────────────────────────────── */}
-      {shapeType === 'gear' ? (
-        // Technic gear — thin cylinder disc, metallic finish
-        <mesh castShadow receiveShadow position={[0, renderH / 2, 0]}>
-          <cylinderGeometry args={[Math.min(brickW, brickD) / 2, Math.min(brickW, brickD) / 2, renderH, 24]} />
-          <meshStandardMaterial color={colorHex} roughness={0.2} metalness={0.55} />
-        </mesh>
-      ) : shapeType === 'cylinder' ? (
-        // Generic cylinder part
-        <mesh castShadow receiveShadow position={[0, renderH / 2, 0]}>
-          <cylinderGeometry args={[Math.min(brickW, brickD) / 2, Math.min(brickW, brickD) / 2, renderH, 16]} />
-          <meshStandardMaterial color={colorHex} roughness={0.45} metalness={0.05} />
-        </mesh>
-      ) : isSlope && slopeGeo ? (
-        <mesh castShadow receiveShadow geometry={slopeGeo}>
-          <meshStandardMaterial
+      {ldrawPartNumber ? (
+        <>
+          {/* ── LDraw visual model (fetched from CDN) ────────────────────── */}
+          <LDrawModel
+            partNumber={ldrawPartNumber}
+            position={[0, 0, 0]}
+            yOffset={renderH}
             color={colorHex}
-            roughness={0.45}
-            metalness={0.05}
-            side={THREE.DoubleSide}
+            onStatus={setLdrawStatus}
           />
-        </mesh>
+          {/* ── Loading / error placeholders ─────────────────────────────── */}
+          {(ldrawStatus === 'idle' || ldrawStatus === 'loading') && (
+            <SpinnerBox w={brickW} h={renderH} d={brickD} />
+          )}
+          {ldrawStatus === 'error' && (
+            <ErrorBox w={brickW} h={renderH} d={brickD} />
+          )}
+          {/* ── Invisible hit mesh for click/drag raycasting ─────────────── */}
+          <mesh position={[0, renderH / 2, 0]}>
+            <boxGeometry args={[brickW, renderH, brickD]} />
+            <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+          </mesh>
+        </>
       ) : (
-        // Default box — covers 'box', 'custom' (motor fallback), and undefined
-        <mesh castShadow receiveShadow position={[0, renderH / 2, 0]}>
-          <boxGeometry args={[brickW, renderH, brickD]} />
-          <meshStandardMaterial
-            color={colorHex}
-            roughness={shapeType === 'custom' ? 0.3 : 0.45}
-            metalness={shapeType === 'custom' ? 0.35 : 0.05}
-          />
-        </mesh>
-      )}
+        <>
+          {/* ── Body ──────────────────────────────────────────────────────── */}
+          {shapeType === 'gear' ? (
+            <mesh castShadow receiveShadow position={[0, renderH / 2, 0]}>
+              <cylinderGeometry args={[Math.min(brickW, brickD) / 2, Math.min(brickW, brickD) / 2, renderH, 24]} />
+              <meshStandardMaterial color={colorHex} roughness={0.2} metalness={0.55} />
+            </mesh>
+          ) : shapeType === 'cylinder' ? (
+            <mesh castShadow receiveShadow position={[0, renderH / 2, 0]}>
+              <cylinderGeometry args={[Math.min(brickW, brickD) / 2, Math.min(brickW, brickD) / 2, renderH, 16]} />
+              <meshStandardMaterial color={colorHex} roughness={0.45} metalness={0.05} />
+            </mesh>
+          ) : isSlope && slopeGeo ? (
+            <mesh castShadow receiveShadow geometry={slopeGeo}>
+              <meshStandardMaterial
+                color={colorHex}
+                roughness={0.45}
+                metalness={0.05}
+                side={THREE.DoubleSide}
+              />
+            </mesh>
+          ) : (
+            <mesh castShadow receiveShadow position={[0, renderH / 2, 0]}>
+              <boxGeometry args={[brickW, renderH, brickD]} />
+              <meshStandardMaterial
+                color={colorHex}
+                roughness={shapeType === 'custom' ? 0.3 : 0.45}
+                metalness={shapeType === 'custom' ? 0.35 : 0.05}
+              />
+            </mesh>
+          )}
 
-      {/* ── Studs (regular bricks only) ─────────────────────────────────── */}
-      {studs.map(([sx, sz]) => (
-        <mesh key={`${sx}-${sz}`} castShadow position={[sx, renderH + STUD_H / 2, sz]}>
-          <cylinderGeometry args={[STUD_R, STUD_R, STUD_H, STUD_SEG]} />
-          <meshStandardMaterial color={colorHex} roughness={0.28} metalness={0.06} />
-        </mesh>
-      ))}
+          {/* ── Studs (regular bricks only) ───────────────────────────────── */}
+          {studs.map(([sx, sz]) => (
+            <mesh key={`${sx}-${sz}`} castShadow position={[sx, renderH + STUD_H / 2, sz]}>
+              <cylinderGeometry args={[STUD_R, STUD_R, STUD_H, STUD_SEG]} />
+              <meshStandardMaterial color={colorHex} roughness={0.28} metalness={0.06} />
+            </mesh>
+          ))}
+        </>
+      )}
 
       {/* ── Selection glow (always box-shaped for simplicity) ───────────── */}
       <mesh ref={glowRef} position={[0, renderH / 2, 0]}>

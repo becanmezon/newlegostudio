@@ -5,8 +5,6 @@ import { OrbitControls, Grid } from '@react-three/drei';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import * as THREE from 'three';
 import { LegoBrick3D } from './LegoBrick3D';
-import { LDrawModel } from './LDrawModel';
-import type { LDrawStatus } from './LDrawModel';
 import { findSnapY, snapCenter, PLATE_H } from './types';
 import type { PlacedBrick } from './types';
 
@@ -29,10 +27,6 @@ interface Props {
   onDeselect: () => void;
   onMove: (id: string, pos: [number, number, number]) => void;
   onMoveBricks: (moves: { id: string; pos: [number, number, number] }[]) => void;
-  /** When set, renders an LDraw model at the scene origin for testing. */
-  ldrawTestPart?: string | null;
-  /** Called when LDraw load status changes. */
-  onLDrawStatus?: (s: LDrawStatus, detail?: string) => void;
 }
 
 interface CompanionDrag {
@@ -376,7 +370,7 @@ function Baseplate({
 }
 
 // ── LegoCanvas (main) ─────────────────────────────────────────────────────────
-export function LegoCanvas({ bricks, selectedIds, onSelect, onSelectMany, onDeselect, onMove, onMoveBricks, ldrawTestPart, onLDrawStatus }: Props) {
+export function LegoCanvas({ bricks, selectedIds, onSelect, onSelectMany, onDeselect, onMove, onMoveBricks }: Props) {
   const orbitRef      = useRef<OrbitControlsImpl>(null!);
   const containerRef  = useRef<HTMLDivElement>(null);
   const isPanModeRef  = useRef(false);           // true while Space/Shift is held
@@ -621,15 +615,6 @@ export function LegoCanvas({ bricks, selectedIds, onSelect, onSelectMany, onDese
           onMarqueeMove={handleMarqueeMove}
           onMarqueeEnd={handleMarqueeEnd}
         />
-
-        {/* LDraw test model — rendered at origin when ldrawTestPart is set */}
-        {ldrawTestPart && (
-          <LDrawModel
-            partNumber={ldrawTestPart}
-            position={[0, 0, 0]}
-            onStatus={onLDrawStatus}
-          />
-        )}
 
         <OrbitControls
           ref={orbitRef}

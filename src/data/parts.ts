@@ -13,6 +13,8 @@ export interface LegoPart {
   shapeType?: ShapeType;
   /** URL of an external glTF/GLB model for shapeType='custom' (future use). */
   modelUrl?: string;
+  /** LDraw part number — when set, the brick is rendered via LDrawLoader instead of box geometry. */
+  ldrawPartNumber?: string;
 }
 
 export const legoParts: LegoPart[] = [

@@ -5,6 +5,7 @@ import { TogetherMode } from './components/modes/TogetherMode';
 import { brickFromPart, findSnapY, snapCenter, makeId } from './components/canvas/types';
 import type { PlacedBrick } from './components/canvas/types';
 import type { LegoPart } from './data/parts';
+import { PART_COLOR_HEX } from './data/colors';
 import { playBrickSnap, playSuccess } from './utils/sounds';
 
 type Mode = 'build' | 'ai' | 'together';
@@ -207,6 +208,14 @@ export default function App() {
     playBrickSnap();
   }, [commit]);
 
+  const changeColor = useCallback((ids: string[], colorName: string) => {
+    commit(prev => prev.map(b =>
+      ids.includes(b.id)
+        ? { ...b, colorName, colorHex: PART_COLOR_HEX[colorName] ?? b.colorHex }
+        : b,
+    ));
+  }, [commit]);
+
   // ── AI import — staggered animation, history reset ────────────────────────
   const importBricks = useCallback((newBricks: PlacedBrick[]) => {
     setHs(EMPTY);
@@ -377,6 +386,7 @@ export default function App() {
             onAddBrick={addBrick}
             onMoveBrick={moveBrick}
             onMoveBricks={moveBricks}
+            onChangeColor={changeColor}
           />
         )}
         {mode === 'ai' && <AIHelpMode onImportBricks={importBricks} />}

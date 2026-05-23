@@ -28,6 +28,8 @@ export interface PlacedBrick {
   position: [number, number, number];
   rotY: number; // 0-3  (steps of 90°)
   shapeType?: ShapeType;
+  /** When set, this brick is rendered via LDrawLoader using the given part number. */
+  ldrawPartNumber?: string;
 }
 
 /** Three.js units per 1 plate unit (= 3.2mm / 8mm LEGO ratio). */
@@ -69,6 +71,7 @@ export function brickFromPart(part: LegoPart, placedCount: number): PlacedBrick 
     position: [ix, 0, iz],
     rotY: 0,
     shapeType: part.shapeType,
+    ldrawPartNumber: part.ldrawPartNumber,
   };
 }
 
@@ -76,11 +79,13 @@ export function brickFromPart(part: LegoPart, placedCount: number): PlacedBrick 
 
 /**
  * Snaps a center coordinate to the correct LEGO stud subgrid.
- *   odd  stud count → integer center   (e.g. w=3 at 0  → studs at -1, 0, 1)
- *   even stud count → half-int center  (e.g. w=2 at 0.5 → studs at 0, 1)
+ *
+ * BaseplateStuds are at half-integer positions (xi - 15.5), so:
+ *   odd  stud count → half-int center  (e.g. w=1 → stud at center, must be half-int)
+ *   even stud count → integer center   (e.g. w=2 → studs at center±0.5, must be int)
  */
 export function snapCenter(value: number, size: number): number {
-  const offset = size % 2 === 0 ? 0.5 : 0;
+  const offset = size % 2 === 0 ? 0.0 : 0.5;
   return Math.round(value - offset) + offset;
 }
 
